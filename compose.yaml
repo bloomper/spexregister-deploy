@@ -1,0 +1,194 @@
+name: spexregister-${DEPLOY_ENV:?DEPLOY_ENV must be set in .env}
+
+services:
+  mysql-app:
+    image: ${MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_APP_DATABASE}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_APP_ROOT_PASSWORD
+      MYSQL_USER: ${MYSQL_APP_USER}
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_APP_USER_PASSWORD
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql_app_db_data:/var/lib/mysql
+    networks:
+      - app_network
+    secrets:
+      - MYSQL_APP_ROOT_PASSWORD
+      - MYSQL_APP_USER_PASSWORD
+
+  mysql-keycloak:
+    image: ${MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_KEYCLOAK_DATABASE}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_KEYCLOAK_ROOT_PASSWORD
+      MYSQL_USER: ${MYSQL_KEYCLOAK_USER}
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_KEYCLOAK_USER_PASSWORD
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql_keycloak_db_data:/var/lib/mysql
+    networks:
+      - keycloak_network
+    secrets:
+      - MYSQL_KEYCLOAK_ROOT_PASSWORD
+      - MYSQL_KEYCLOAK_USER_PASSWORD
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:?KEYCLOAK_IMAGE must be set in .env}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        export KC_DB_PASSWORD=$$(cat /run/secrets/MYSQL_KEYCLOAK_USER_PASSWORD)
+        export KC_BOOTSTRAP_ADMIN_PASSWORD=$$(cat /run/secrets/KEYCLOAK_ADMIN_PASSWORD)
+        exec /opt/keycloak/bin/kc.sh start --import-realm
+    environment:
+      KC_HOSTNAME: https://${AUTH_HOST}/auth
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: true
+      KC_HTTP_ENABLED: true
+      KC_HTTP_PORT: 8080
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_LOG_LEVEL: info
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql-keycloak/${MYSQL_KEYCLOAK_DATABASE}
+      KC_DB_USERNAME: ${MYSQL_KEYCLOAK_USER}
+      KC_SPI_EVENTS_LISTENER__FGV_ADMIN_NOTIFICATION__RECIPIENTS: ${KEYCLOAK_ADMIN_NOTIFICATION_RECIPIENTS}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_FROM: ${MAIL_FROM}
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /auth/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep \"HTTP/1.1 200 OK\" <&3" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      mysql-keycloak:
+        condition: service_healthy
+    networks:
+      - app_network
+      - keycloak_network
+    secrets:
+      - MYSQL_KEYCLOAK_USER_PASSWORD
+      - KEYCLOAK_ADMIN_PASSWORD
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE must be set in .env}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-app/${MYSQL_APP_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER}
+      SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_DIRECTORY_ROOT: /data/index_data
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/auth/realms/${APP_KEYCLOAK_REALM}/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${AUTH_HOST}/auth/realms/${APP_KEYCLOAK_REALM}
+      SPEXREGISTER_IMPEX_STORAGE_PATH: /data/impex_data
+      LOGGING_FILE_PATH: /data/log_data
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      APP_BASE_URL: https://${API_HOST}/api
+      APP_KEYCLOAK_URL: http://keycloak:8080/auth
+      APP_KEYCLOAK_REALM: ${APP_KEYCLOAK_REALM}
+      APP_KEYCLOAK_ADMIN_CLIENT_ID: ${APP_KEYCLOAK_ADMIN_CLIENT_ID}
+      APP_KEYCLOAK_CLIENT_CLIENT_ID: ${APP_KEYCLOAK_CLIENT_CLIENT_ID}
+      APP_SEED_AUDIT_DATA: ${APP_SEED_AUDIT_DATA}
+      APP_IMPORT_SAMPLE_DATA: ${APP_IMPORT_SAMPLE_DATA}
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep -q \"^HTTP/1.1 200\" <&3" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    depends_on:
+      mysql-app:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    volumes:
+      - app_log_data:/data/log_data
+      - app_index_data:/data/index_data
+      - app_impex_data:/data/impex_data
+    networks:
+      - app_network
+    secrets:
+      - MYSQL_APP_USER_PASSWORD
+      - APP_KEYCLOAK_ADMIN_CLIENT_SECRET
+      - APP_KEYCLOAK_CLIENT_CLIENT_SECRET
+      - APP_SECRET_KEY
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be set in .env}
+    command:
+      - sh
+      - -c
+      - |
+        export AUTH_SECRET=$$(cat /run/secrets/WEB_AUTH_SECRET)
+        export AUTH_KEYCLOAK_SECRET=$$(cat /run/secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET)
+        exec node server.js
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      BETTER_AUTH_URL: https://${WEB_HOST}
+      AUTH_KEYCLOAK_ID: ${APP_KEYCLOAK_CLIENT_CLIENT_ID}
+      AUTH_KEYCLOAK_ISSUER: https://${AUTH_HOST}/auth/realms/${APP_KEYCLOAK_REALM}
+      API_GRAPHQL_ENDPOINT: http://app:8080/api/graphql
+      API_REST_BASE_URL: http://app:8080
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL}
+      FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
+      SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - app_network
+    secrets:
+      - WEB_AUTH_SECRET
+      - APP_KEYCLOAK_CLIENT_CLIENT_SECRET
+
+volumes:
+  mysql_app_db_data:
+  mysql_keycloak_db_data:
+  app_log_data:
+  app_index_data:
+  app_impex_data:
+
+networks:
+  app_network:
+  keycloak_network:
+
+secrets:
+  MYSQL_APP_ROOT_PASSWORD:
+    file: ./secrets/MYSQL_APP_ROOT_PASSWORD
+  MYSQL_APP_USER_PASSWORD:
+    file: ./secrets/MYSQL_APP_USER_PASSWORD
+  MYSQL_KEYCLOAK_ROOT_PASSWORD:
+    file: ./secrets/MYSQL_KEYCLOAK_ROOT_PASSWORD
+  MYSQL_KEYCLOAK_USER_PASSWORD:
+    file: ./secrets/MYSQL_KEYCLOAK_USER_PASSWORD
+  KEYCLOAK_ADMIN_PASSWORD:
+    file: ./secrets/KEYCLOAK_ADMIN_PASSWORD
+  APP_KEYCLOAK_ADMIN_CLIENT_SECRET:
+    file: ./secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET
+  APP_KEYCLOAK_CLIENT_CLIENT_SECRET:
+    file: ./secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET
+  APP_SECRET_KEY:
+    file: ./secrets/APP_SECRET_KEY
+  WEB_AUTH_SECRET:
+    file: ./secrets/WEB_AUTH_SECRET

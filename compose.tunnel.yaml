@@ -1,0 +1,9 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    command: tunnel --no-autoupdate run
+    env_file:
+      - ./secrets/cloudflared.env
+    restart: unless-stopped
+    networks:
+      - app_network

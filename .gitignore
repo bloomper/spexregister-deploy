@@ -1,0 +1,5 @@
+/.env
+/secrets/
+.idea
+.DS_Store
+*.iml
