@@ -28,6 +28,11 @@ generate APP_SECRET_KEY "$(random 32)"
 generate WEB_AUTH_SECRET "$(random 48)"
 generate SAMPLE_USER_PASSWORD "$(random 16)"
 
+if [[ ! -e secrets/SMTP_PASSWORD ]]; then
+  : > secrets/SMTP_PASSWORD
+  echo "created secrets/SMTP_PASSWORD (empty, write the SMTP password into it if the relay needs one)"
+fi
+
 if [[ ! -s secrets/cloudflared.env ]]; then
   printf 'TUNNEL_TOKEN=\n' > secrets/cloudflared.env
   echo "created secrets/cloudflared.env (paste the tunnel token into it)"

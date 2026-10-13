@@ -61,6 +61,7 @@ services:
       - |
         export KC_DB_PASSWORD=$$(cat /run/secrets/MYSQL_KEYCLOAK_USER_PASSWORD)
         export KC_BOOTSTRAP_ADMIN_PASSWORD=$$(cat /run/secrets/KEYCLOAK_ADMIN_PASSWORD)
+        export SMTP_PASSWORD=$$(cat /run/secrets/SMTP_PASSWORD)
         exec /opt/keycloak/bin/kc.sh start --import-realm
     environment:
       KC_HOSTNAME: https://${AUTH_HOST}/auth
@@ -80,6 +81,10 @@ services:
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_FROM: ${MAIL_FROM}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_SSL: ${SMTP_SSL:-false}
     restart: unless-stopped
     logging: *logging
     healthcheck:
@@ -97,6 +102,7 @@ services:
     secrets:
       - MYSQL_KEYCLOAK_USER_PASSWORD
       - KEYCLOAK_ADMIN_PASSWORD
+      - SMTP_PASSWORD
 
   app:
     image: ${APP_IMAGE:?APP_IMAGE must be set in .env}
@@ -164,6 +170,12 @@ services:
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
     restart: unless-stopped
     logging: *logging
+    healthcheck:
+      test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:3000/api/auth/ok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       app:
         condition: service_healthy
@@ -192,6 +204,8 @@ secrets:
     file: ./secrets/MYSQL_KEYCLOAK_USER_PASSWORD
   KEYCLOAK_ADMIN_PASSWORD:
     file: ./secrets/KEYCLOAK_ADMIN_PASSWORD
+  SMTP_PASSWORD:
+    file: ./secrets/SMTP_PASSWORD
   APP_KEYCLOAK_ADMIN_CLIENT_SECRET:
     file: ./secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET
   APP_KEYCLOAK_CLIENT_CLIENT_SECRET:

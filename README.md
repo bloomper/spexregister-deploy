@@ -25,8 +25,9 @@ hostname is needed only for MCP clients and `/docs`.
 | `compose.tunnel.yaml`         | `cloudflared` connector, for hosts published through a Cloudflare Tunnel   |
 | `compose.staging.yaml`        | Staging additions: Mailpit catches all outgoing mail                       |
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
+| `production.env.example`      | Template for `.env` on the production host                                 |
 | `bin/init-secrets.sh`         | Generates random secrets into `secrets/` (never overwrites existing ones)  |
-| `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL and sample user passwords in Keycloak   |
+| `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL, theme, mail settings and sample user passwords in Keycloak |
 | `bin/backup-db.sh`            | Dumps both databases into `backups/`, pruning dumps older than 14 days     |
 
 `COMPOSE_FILE` in `.env` selects the overlays, so plain `docker compose ...` commands work on each host.
@@ -128,7 +129,8 @@ changes:
 
 - sets the `fgv-admin` client secret to `secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET`
 - points the `spexregister` client at `https://WEB_HOST`
-- selects `KEYCLOAK_THEME` as the realm's login and account theme
+- selects `KEYCLOAK_THEME` as the realm's login, account and email theme
+- sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
 - replaces the passwords of `SAMPLE_USERS`, which are public in `fgv.json`, with `secrets/SAMPLE_USER_PASSWORD`
 
 You can run it again safely.
@@ -146,6 +148,28 @@ docker compose up -d
 
 Containers whose image changed are recreated. A new `fgv.json` in the Keycloak image doesn't change an existing
 realm, because Keycloak imports it only when the realm doesn't exist yet.
+
+When an update adds a secret or a variable, compare `.env` with the example file, then run `bin/init-secrets.sh`
+and `bin/configure-keycloak.sh` again. Neither overwrites an existing secret.
+
+## Mail
+
+Keycloak sends all mail: email verification, password reset and the approval notifications. Staging sends it to
+Mailpit. For a real relay, set these in `.env` and run `bin/configure-keycloak.sh`:
+
+| Variable        | Purpose                                                                  |
+|-----------------|--------------------------------------------------------------------------|
+| `SMTP_HOST`     | SMTP server                                                              |
+| `SMTP_PORT`     | Usually `587` with STARTTLS, `465` with implicit TLS, `25` without       |
+| `SMTP_AUTH`     | `true` to log in with `SMTP_USER` and the password in `secrets/SMTP_PASSWORD` |
+| `SMTP_USER`     | SMTP user                                                                |
+| `SMTP_STARTTLS` | `true` to upgrade the connection with STARTTLS                           |
+| `SMTP_SSL`      | `true` to connect with implicit TLS                                      |
+| `MAIL_FROM`     | Sender address                                                           |
+
+`bin/init-secrets.sh` creates `secrets/SMTP_PASSWORD` empty. Write the password into it without a trailing
+newline, e.g. `printf '%s' '<password>' > secrets/SMTP_PASSWORD`. Check the result with *Test connection* under
+*Realm settings → Email* in the admin console.
 
 ## Data and backups
 
@@ -214,11 +238,13 @@ Then repeat *First start*. The secrets in `secrets/` and the dumps in `backups/`
 production also goes through a Cloudflare Tunnel, using its own tunnel and token. Leave it out if production
 sits behind its own reverse proxy instead. A production host would differ in these ways:
 
-- `production.env.example` with `DEPLOY_ENV=production`, `APP_IMPORT_SAMPLE_DATA=false`,
-  `APP_SEED_AUDIT_DATA=false`, a real SMTP relay instead of Mailpit and `SAMPLE_USERS` left empty
+- `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `APP_IMPORT_SAMPLE_DATA=false`,
+  `APP_SEED_AUDIT_DATA=false`, a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
+  placeholders) and `SAMPLE_USERS` left empty
 - `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
 - `APP_IMAGE`, `WEB_IMAGE` and `KEYCLOAK_IMAGE` pinned to release versions, e.g.
-  `bloomper/spexregister-server:2.0.0`, instead of `develop`
+  `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of
+  `latest`, so that an update happens only when `.env` changes
 
 Running both databases in one MySQL server would mean pointing `KC_DB_URL` at `mysql-app` and creating the
 Keycloak database and user with an init script. Two servers keep the realm and application data independently

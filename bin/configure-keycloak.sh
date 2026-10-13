@@ -28,9 +28,24 @@ kcadm update "clients/$(client_uuid "$APP_KEYCLOAK_CLIENT_CLIENT_ID")" -r "$APP_
 echo "updated $APP_KEYCLOAK_CLIENT_CLIENT_ID URLs (https://$WEB_HOST)"
 
 if [[ -n "${KEYCLOAK_THEME:-}" ]]; then
-  kcadm update "realms/$APP_KEYCLOAK_REALM" -s "loginTheme=$KEYCLOAK_THEME" -s "accountTheme=$KEYCLOAK_THEME"
-  echo "updated login and account theme to $KEYCLOAK_THEME"
+  kcadm update "realms/$APP_KEYCLOAK_REALM" -s "loginTheme=$KEYCLOAK_THEME" -s "accountTheme=$KEYCLOAK_THEME" -s "emailTheme=$KEYCLOAK_THEME"
+  echo "updated login, account and email theme to $KEYCLOAK_THEME"
 fi
+
+smtp=(
+  -s "smtpServer.host=$SMTP_HOST"
+  -s "smtpServer.port=$SMTP_PORT"
+  -s "smtpServer.from=$MAIL_FROM"
+  -s "smtpServer.auth=${SMTP_AUTH:-false}"
+  -s "smtpServer.user=${SMTP_USER:-}"
+  -s "smtpServer.starttls=${SMTP_STARTTLS:-false}"
+  -s "smtpServer.ssl=${SMTP_SSL:-false}"
+)
+if [[ -s secrets/SMTP_PASSWORD ]]; then
+  smtp+=(-s "smtpServer.password=$(cat secrets/SMTP_PASSWORD)")
+fi
+kcadm update "realms/$APP_KEYCLOAK_REALM" "${smtp[@]}"
+echo "updated mail settings ($SMTP_HOST:$SMTP_PORT)"
 
 sample_users=${SAMPLE_USERS:-}
 for user in ${sample_users//,/ }; do
