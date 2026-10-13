@@ -1,5 +1,7 @@
 /.env
 /secrets/
+/data/
+/backups/
 .idea
 .DS_Store
 *.iml

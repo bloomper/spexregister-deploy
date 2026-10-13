@@ -1,3 +1,9 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
 services:
   cloudflared:
     image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
@@ -5,5 +11,6 @@ services:
     env_file:
       - ./secrets/cloudflared.env
     restart: unless-stopped
+    logging: *logging
     networks:
       - app_network

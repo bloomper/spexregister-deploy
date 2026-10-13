@@ -27,6 +27,7 @@ hostname is needed only for MCP clients and `/docs`.
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
 | `bin/init-secrets.sh`         | Generates random secrets into `secrets/` (never overwrites existing ones)  |
 | `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL and sample user passwords in Keycloak   |
+| `bin/backup-db.sh`            | Dumps both databases into `backups/`, pruning dumps older than 14 days     |
 
 `COMPOSE_FILE` in `.env` selects the overlays, so plain `docker compose ...` commands work on each host.
 
@@ -146,13 +147,66 @@ docker compose up -d
 Containers whose image changed are recreated. A new `fgv.json` in the Keycloak image doesn't change an existing
 realm, because Keycloak imports it only when the realm doesn't exist yet.
 
+## Data and backups
+
+| Location                    | Contents                                   | Backup                                  |
+|-----------------------------|--------------------------------------------|-----------------------------------------|
+| volume `mysql_app_db_data`  | Application database                       | `bin/backup-db.sh`                      |
+| volume `mysql_keycloak_db_data` | Keycloak database (realm, users)       | `bin/backup-db.sh`                      |
+| `data/app/impex_data`       | Import and export files                    | copy the directory                      |
+| `data/app/log_data`         | Application logs                           | not needed                              |
+| `data/app/index_data`       | Search index, rebuilt from the database    | not needed                              |
+
+The databases stay in named volumes: copying the files of a running MySQL server doesn't give a consistent
+backup. `bin/backup-db.sh` uses `mysqldump --single-transaction` instead, which is consistent without stopping
+anything. Run it nightly from the host user's crontab (`crontab -e`):
+
+```
+30 2 * * * /home/<user>/spexregister-deploy/bin/backup-db.sh >> /home/<user>/spexregister-deploy/backups/backup.log 2>&1
+```
+
+`BACKUP_KEEP_DAYS` sets how many days of dumps to keep (default 14). Copy `backups/` off the host as well, e.g.
+with `rclone` or `rsync`; a backup on the same disk doesn't survive losing the disk.
+
+To restore a dump:
+
+```shell
+gunzip -c backups/<timestamp>/mysql-app.sql.gz | docker compose exec -T mysql-app \
+  sh -c 'MYSQL_PWD=$(cat /run/secrets/MYSQL_APP_ROOT_PASSWORD) mysql -uroot "$MYSQL_DATABASE"'
+```
+
+Use `mysql-keycloak` and `MYSQL_KEYCLOAK_ROOT_PASSWORD` for the Keycloak dump.
+
+Apart from the app's own files in `data/app/log_data`, every service logs to the console only; read it with
+`docker compose logs -f <service>`. Each service keeps at most 5 × 10 MB of console output (`x-logging` in the
+compose files), so logs can't fill the disk.
+
+To force a new search index, either call `POST /api/admin/index/spexare` as an administrator, or stop `app`,
+empty `data/app/index_data` and start `app` again; it rebuilds an empty index on startup.
+
+### Moving from named volumes
+
+Hosts set up before `data/` existed keep the app's files in the volumes `app_log_data`, `app_index_data` and
+`app_impex_data`. Copy the import and export files over once, after `git pull`:
+
+```shell
+docker compose stop app
+mkdir -p data/app
+docker run --rm -v spexregister-${DEPLOY_ENV}_app_impex_data:/from -v "$PWD/data/app/impex_data":/to alpine cp -a /from/. /to/
+docker compose up -d app                  # rebuilds the index, logs start afresh
+docker volume rm spexregister-${DEPLOY_ENV}_app_log_data spexregister-${DEPLOY_ENV}_app_index_data spexregister-${DEPLOY_ENV}_app_impex_data
+```
+
+Set `DEPLOY_ENV` in the shell first, or write the volume names out (`docker volume ls`).
+
 ## Resetting staging data
 
 ```shell
-docker compose down -v                    # removes all volumes: databases, index, Keycloak realm
+docker compose down -v                    # removes the volumes: databases, Keycloak realm, Mailpit
+rm -rf data/app                           # index, logs, import and export files
 ```
 
-Then repeat *First start*. The secrets in `secrets/` are kept and reused.
+Then repeat *First start*. The secrets in `secrets/` and the dumps in `backups/` are kept.
 
 ## Production
 
@@ -162,7 +216,7 @@ sits behind its own reverse proxy instead. A production host would differ in the
 
 - `production.env.example` with `DEPLOY_ENV=production`, `APP_IMPORT_SAMPLE_DATA=false`,
   `APP_SEED_AUDIT_DATA=false`, a real SMTP relay instead of Mailpit and `SAMPLE_USERS` left empty
-- `compose.production.yaml` for production-only services, such as scheduled database dumps to off-host storage
+- `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
 - `APP_IMAGE`, `WEB_IMAGE` and `KEYCLOAK_IMAGE` pinned to release versions, e.g.
   `bloomper/spexregister-server:2.0.0`, instead of `develop`
 
