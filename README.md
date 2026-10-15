@@ -27,7 +27,7 @@ hostname is needed only for MCP clients and `/docs`.
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
 | `production.env.example`      | Template for `.env` on the production host                                 |
 | `bin/init-secrets.sh`         | Generates random secrets into `secrets/` (never overwrites existing ones)  |
-| `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL, theme, mail settings and sample user passwords in Keycloak |
+| `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL, theme and mail settings in Keycloak     |
 | `bin/backup-db.sh`            | Dumps both databases into `backups/`, pruning dumps older than 14 days     |
 
 `COMPOSE_FILE` in `.env` selects the overlays, so plain `docker compose ...` commands work on each host.
@@ -128,12 +128,17 @@ Keycloak imports `fgv.json` only when the realm doesn't exist yet. Then `configu
 changes:
 
 - sets the `fgv-admin` client secret to `secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET`
-- points the `spexregister` client at `https://WEB_HOST`
+- makes the `spexregister` client confidential with the secret `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET` and
+  points it at `https://WEB_HOST`
+- turns off direct access grants for the `spexregister-mcp` client
 - selects `KEYCLOAK_THEME` as the realm's login, account and email theme
 - sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
-- replaces the passwords of `SAMPLE_USERS`, which are public in `fgv.json`, with `secrets/SAMPLE_USER_PASSWORD`
 
 You can run it again safely.
+
+With `APP_IMPORT_SAMPLE_DATA=true` the app replaces all data and all Keycloak users on every start. Besides
+random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
+has the password in `secrets/SAMPLE_USER_PASSWORD`.
 
 Keycloak admin console: `https://AUTH_HOST/auth/admin`, user `KEYCLOAK_ADMIN`, password in
 `secrets/KEYCLOAK_ADMIN_PASSWORD`.
@@ -154,8 +159,9 @@ and `bin/configure-keycloak.sh` again. Neither overwrites an existing secret.
 
 ## Mail
 
-Keycloak sends all mail: email verification, password reset and the approval notifications. Staging sends it to
-Mailpit. For a real relay, set these in `.env` and run `bin/configure-keycloak.sh`:
+Keycloak sends email verification, password reset and the approval notifications. The `app` service sends
+removal requests from users to `KEYCLOAK_ADMIN_NOTIFICATION_RECIPIENTS`. Both use the same settings. Staging sends
+all mail to Mailpit. For a real relay, set these in `.env`, run `bin/configure-keycloak.sh` and restart `app`:
 
 | Variable        | Purpose                                                                  |
 |-----------------|--------------------------------------------------------------------------|
@@ -239,8 +245,12 @@ production also goes through a Cloudflare Tunnel, using its own tunnel and token
 sits behind its own reverse proxy instead. A production host would differ in these ways:
 
 - `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `APP_IMPORT_SAMPLE_DATA=false`,
-  `APP_SEED_AUDIT_DATA=false`, a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
-  placeholders) and `SAMPLE_USERS` left empty
+  `APP_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
+  placeholders)
+- no sample users: the realm in the Keycloak image contains none, and only the sample data import creates them
+- `APP_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
+  `docker compose up -d app`. That gives every existing row a baseline revision. The app seeds only while the
+  change log is empty, so the flag can stay on afterwards
 - `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
 - `APP_IMAGE`, `WEB_IMAGE` and `KEYCLOAK_IMAGE` pinned to release versions, e.g.
   `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of

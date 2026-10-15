@@ -20,12 +20,18 @@ kcadm update "clients/$(client_uuid "$APP_KEYCLOAK_ADMIN_CLIENT_ID")" -r "$APP_K
 echo "updated $APP_KEYCLOAK_ADMIN_CLIENT_ID secret"
 
 kcadm update "clients/$(client_uuid "$APP_KEYCLOAK_CLIENT_CLIENT_ID")" -r "$APP_KEYCLOAK_REALM" \
+  -s "publicClient=false" \
+  -s "secret=$(cat secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET)" \
   -s "rootUrl=https://$WEB_HOST" \
   -s "baseUrl=/" \
   -s 'redirectUris=["/*"]' \
   -s 'webOrigins=["+"]' \
   -s 'attributes."post.logout.redirect.uris"=+'
-echo "updated $APP_KEYCLOAK_CLIENT_CLIENT_ID URLs (https://$WEB_HOST)"
+echo "updated $APP_KEYCLOAK_CLIENT_CLIENT_ID secret and URLs (https://$WEB_HOST)"
+
+mcp_client_id=${APP_KEYCLOAK_MCP_CLIENT_ID:-spexregister-mcp}
+kcadm update "clients/$(client_uuid "$mcp_client_id")" -r "$APP_KEYCLOAK_REALM" -s "directAccessGrantsEnabled=false"
+echo "disabled direct access grants for $mcp_client_id"
 
 if [[ -n "${KEYCLOAK_THEME:-}" ]]; then
   kcadm update "realms/$APP_KEYCLOAK_REALM" -s "loginTheme=$KEYCLOAK_THEME" -s "accountTheme=$KEYCLOAK_THEME" -s "emailTheme=$KEYCLOAK_THEME"
@@ -46,9 +52,3 @@ if [[ -s secrets/SMTP_PASSWORD ]]; then
 fi
 kcadm update "realms/$APP_KEYCLOAK_REALM" "${smtp[@]}"
 echo "updated mail settings ($SMTP_HOST:$SMTP_PORT)"
-
-sample_users=${SAMPLE_USERS:-}
-for user in ${sample_users//,/ }; do
-  kcadm set-password -r "$APP_KEYCLOAK_REALM" --username "$user" --new-password "$(cat secrets/SAMPLE_USER_PASSWORD)"
-  echo "updated password for $user"
-done
