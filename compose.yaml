@@ -62,6 +62,7 @@ services:
         export KC_DB_PASSWORD=$$(cat /run/secrets/MYSQL_KEYCLOAK_USER_PASSWORD)
         export KC_BOOTSTRAP_ADMIN_PASSWORD=$$(cat /run/secrets/KEYCLOAK_ADMIN_PASSWORD)
         export SMTP_PASSWORD=$$(cat /run/secrets/SMTP_PASSWORD)
+        export KC_SPI_FORM_ACTION__FGV_TURNSTILE__SECRET_KEY=$$(cat /run/secrets/TURNSTILE_SECRET_KEY)
         exec /opt/keycloak/bin/kc.sh start --import-realm
     environment:
       KC_HOSTNAME: https://${AUTH_HOST}/auth
@@ -78,6 +79,10 @@ services:
       KC_DB_URL: jdbc:mysql://mysql-keycloak/${MYSQL_KEYCLOAK_DATABASE}
       KC_DB_USERNAME: ${MYSQL_KEYCLOAK_USER}
       KC_SPI_EVENTS_LISTENER__FGV_ADMIN_NOTIFICATION__RECIPIENTS: ${KEYCLOAK_ADMIN_NOTIFICATION_RECIPIENTS}
+      KC_SPI_FORM_ACTION__FGV_TURNSTILE__SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      SPEXREGISTER_NAME: ${WEB_NAME:-Spexregister}
+      SPEXREGISTER_URL: https://${WEB_HOST}
+      SPEXREGISTER_MCP_URL: https://${API_HOST}/api/mcp
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_FROM: ${MAIL_FROM}
@@ -103,6 +108,7 @@ services:
       - MYSQL_KEYCLOAK_USER_PASSWORD
       - KEYCLOAK_ADMIN_PASSWORD
       - SMTP_PASSWORD
+      - TURNSTILE_SECRET_KEY
 
   app:
     image: ${APP_IMAGE:?APP_IMAGE must be set in .env}
@@ -152,7 +158,6 @@ services:
     secrets:
       - MYSQL_APP_USER_PASSWORD
       - APP_KEYCLOAK_ADMIN_CLIENT_SECRET
-      - APP_KEYCLOAK_CLIENT_CLIENT_SECRET
       - APP_SECRET_KEY
       - SAMPLE_USER_PASSWORD
       - SMTP_PASSWORD
@@ -216,6 +221,8 @@ secrets:
     file: ./secrets/KEYCLOAK_ADMIN_PASSWORD
   SMTP_PASSWORD:
     file: ./secrets/SMTP_PASSWORD
+  TURNSTILE_SECRET_KEY:
+    file: ./secrets/TURNSTILE_SECRET_KEY
   APP_KEYCLOAK_ADMIN_CLIENT_SECRET:
     file: ./secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET
   APP_KEYCLOAK_CLIENT_CLIENT_SECRET:

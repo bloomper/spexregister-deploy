@@ -75,6 +75,9 @@ Universal SSL certificate doesn't cover it.
    | `MAIL_HOST`  | `http://mailpit:8025`  |
 
 4. Restrict who can reach staging with Cloudflare Access. See *Cloudflare Access* below.
+5. Open *Turnstile* in the dashboard and select *Add widget*. Name it e.g. `spexregister-staging`, add `AUTH_HOST` as
+   hostname and choose *Managed* as widget mode. Put the site key in `TURNSTILE_SITE_KEY` in `.env` and the
+   secret key in `secrets/TURNSTILE_SECRET_KEY` (see section 3 below).
 
 ### Cloudflare Access
 
@@ -109,9 +112,10 @@ Testers then go through two logins: the Access PIN for `WEB_HOST`, then their Ke
 git clone https://github.com/bloomper/spexregister-deploy.git
 cd spexregister-deploy
 
-cp staging.env.example .env               # set the hostnames and email addresses
+cp staging.env.example .env               # set the hostnames, email addresses and TURNSTILE_SITE_KEY
 bin/init-secrets.sh
 nano secrets/cloudflared.env              # TUNNEL_TOKEN=<token from step 2>
+printf '%s' '<secret key>' > secrets/TURNSTILE_SECRET_KEY
 ```
 
 ## 4. First start
@@ -128,13 +132,23 @@ Keycloak imports `fgv.json` only when the realm doesn't exist yet. Then `configu
 changes:
 
 - sets the `fgv-admin` client secret to `secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET`
-- makes the `spexregister` client confidential with the secret `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET` and
-  points it at `https://WEB_HOST`
-- turns off direct access grants for the `spexregister-mcp` client
+- makes the `spexregister` client confidential with the secret `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET`,
+  names it `WEB_NAME` (default `Spexregister`) and points it at `https://WEB_HOST`. Only the web's login callback
+  is allowed as redirect URI, PKCE is required and direct access grants are off
+- turns off direct access grants for the `spexregister-mcp` client, makes users consent before an MCP client
+  gets access and adds `https://API_HOST/api/mcp` as audience to its tokens. The app rejects MCP tokens without it
+- turns on brute force protection, the password policy (at least 12 characters, not the email address), login
+  and admin events (kept 30 days), a 60-day limit on offline sessions and passkeys
+- requires a Turnstile challenge on registration, through a copy of the registration flow called `fgv registration`
+- replaces the realm keys that earlier versions of `fgv.json` contained, and so were public, with new ones. This
+  signs everyone out once
 - selects `KEYCLOAK_THEME` as the realm's login, account and email theme
 - sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
 
-You can run it again safely.
+You can run it again safely. It overwrites these settings if they were changed in the admin console.
+
+A new realm gets the same settings from `fgv.json`, which reads `SPEXREGISTER_NAME`, `SPEXREGISTER_URL` and
+`SPEXREGISTER_MCP_URL`. `compose.yaml` sets them from `WEB_NAME`, `WEB_HOST` and `API_HOST`.
 
 With `APP_IMPORT_SAMPLE_DATA=true` the app replaces all data and all Keycloak users on every start. Besides
 random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
@@ -142,6 +156,19 @@ has the password in `secrets/SAMPLE_USER_PASSWORD`.
 
 Keycloak admin console: `https://AUTH_HOST/auth/admin`, user `KEYCLOAK_ADMIN`, password in
 `secrets/KEYCLOAK_ADMIN_PASSWORD`.
+
+### Passkeys
+
+Users add a passkey under *Signing in* in the account console (`https://AUTH_HOST/auth/realms/fgv/account`) and
+can then sign in with it instead of a password. Passkeys are bound to `AUTH_HOST`, so changing that hostname
+makes every registered passkey unusable.
+
+### Registration CAPTCHA
+
+New users solve a Cloudflare Turnstile challenge on the registration page. Without `TURNSTILE_SITE_KEY` or
+`secrets/TURNSTILE_SECRET_KEY`, Keycloak logs a warning at start and registration has no CAPTCHA. Cloudflare's
+test keys `1x00000000000000000000AA` (site key) and `1x0000000000000000000000000000000AA` (secret key) always pass
+and work on any hostname.
 
 ## Updating
 

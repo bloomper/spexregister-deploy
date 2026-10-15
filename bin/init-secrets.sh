@@ -33,6 +33,11 @@ if [[ ! -e secrets/SMTP_PASSWORD ]]; then
   echo "created secrets/SMTP_PASSWORD (empty, write the SMTP password into it if the relay needs one)"
 fi
 
+if [[ ! -e secrets/TURNSTILE_SECRET_KEY ]]; then
+  : > secrets/TURNSTILE_SECRET_KEY
+  echo "created secrets/TURNSTILE_SECRET_KEY (empty, write the Turnstile secret key into it)"
+fi
+
 if [[ ! -s secrets/cloudflared.env ]]; then
   printf 'TUNNEL_TOKEN=\n' > secrets/cloudflared.env
   echo "created secrets/cloudflared.env (paste the tunnel token into it)"
