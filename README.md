@@ -27,7 +27,8 @@ hostname is needed only for MCP clients and `/docs`.
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
 | `production.env.example`      | Template for `.env` on the production host                                 |
 | `bin/init-secrets.sh`         | Generates random secrets into `secrets/` (never overwrites existing ones)  |
-| `bin/configure-keycloak.sh`   | Sets client secrets, frontend URL, theme and mail settings in Keycloak     |
+| `bin/configure-keycloak.sh`   | Sets client secrets, theme and mail settings in a new Keycloak realm       |
+| `bin/migrations/`             | Dated one-off scripts that bring an existing realm up to date              |
 | `bin/backup-db.sh`            | Dumps both databases into `backups/`, pruning dumps older than 14 days     |
 
 `COMPOSE_FILE` in `.env` selects the overlays, so plain `docker compose ...` commands work on each host.
@@ -132,23 +133,14 @@ Keycloak imports `fgv.json` only when the realm doesn't exist yet. Then `configu
 changes:
 
 - sets the `fgv-admin` client secret to `secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET`
-- makes the `spexregister` client confidential with the secret `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET`,
-  names it `WEB_NAME` (default `Spexregister`) and points it at `https://WEB_HOST`. Only the web's login callback
-  is allowed as redirect URI, PKCE is required and direct access grants are off
-- turns off direct access grants for the `spexregister-mcp` client, makes users consent before an MCP client
-  gets access and adds `https://API_HOST/api/mcp` as audience to its tokens. The app rejects MCP tokens without it
-- turns on brute force protection, the password policy (at least 12 characters, not the email address), login
-  and admin events (kept 30 days), a 60-day limit on offline sessions and passkeys
-- requires a Turnstile challenge on registration, through a copy of the registration flow called `fgv registration`
-- replaces the realm keys that earlier versions of `fgv.json` contained, and so were public, with new ones. This
-  signs everyone out once
+- sets the `spexregister` client secret to `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET`
 - selects `KEYCLOAK_THEME` as the realm's login, account and email theme
 - sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
 
-You can run it again safely. It overwrites these settings if they were changed in the admin console.
-
-A new realm gets the same settings from `fgv.json`, which reads `SPEXREGISTER_NAME`, `SPEXREGISTER_URL` and
-`SPEXREGISTER_MCP_URL`. `compose.yaml` sets them from `WEB_NAME`, `WEB_HOST` and `API_HOST`.
+You can run it again safely. Everything else comes from `fgv.json`, which reads the name and address of the web
+client and the MCP endpoint from `SPEXREGISTER_NAME`, `SPEXREGISTER_URL` and `SPEXREGISTER_MCP_URL`.
+`compose.yaml` sets them from `WEB_NAME`, `WEB_HOST` and `API_HOST`. A new realm needs none of the scripts in
+`bin/migrations/`.
 
 With `APP_IMPORT_SAMPLE_DATA=true` the app replaces all data and all Keycloak users on every start. Besides
 random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
@@ -183,6 +175,31 @@ realm, because Keycloak imports it only when the realm doesn't exist yet.
 
 When an update adds a secret or a variable, compare `.env` with the example file, then run `bin/init-secrets.sh`
 and `bin/configure-keycloak.sh` again. Neither overwrites an existing secret.
+
+### Keycloak migrations
+
+A change to `fgv.json` reaches only realms created after it. For realms that already exist, the change comes with
+a script in `bin/migrations/`, named after the date it was added. Run every script that is newer than the realm, in
+date order, after `docker compose up -d`:
+
+```shell
+bin/migrations/2026-10-15-security-passkeys-turnstile.sh
+```
+
+The scripts can be run again safely. Once every environment has run a script, delete it; git history keeps it.
+
+`2026-10-15-security-passkeys-turnstile.sh`:
+
+- names the `spexregister` client `WEB_NAME` and points it at `https://WEB_HOST`, with only the web's login callback
+  as redirect URI, PKCE required and no direct access grants
+- makes users consent before an MCP client gets access, and adds `https://API_HOST/api/mcp` as audience to MCP
+  tokens. The app rejects MCP tokens without it
+- turns on brute force protection, the password policy (at least 12 characters, not the email address), login and
+  admin events (kept 30 days), a 60-day limit on offline sessions and passkeys
+- requires a Turnstile challenge on registration, through a copy of the registration flow called `fgv registration`
+- skips OTP when a user signs in with a passkey, through a copy of the browser flow called `fgv browser`
+- replaces the realm keys that earlier versions of `fgv.json` contained, and so were public. This signs everyone
+  out once
 
 ## Mail
 
