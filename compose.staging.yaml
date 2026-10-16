@@ -5,23 +5,23 @@ x-logging: &logging
     max-file: "5"
 
 services:
-  mailpit:
+  mail:
     image: axllent/mailpit:v1.31.4
     restart: unless-stopped
     logging: *logging
     volumes:
-      - mailpit_data:/data
+      - mail_data:/data
     environment:
       MP_DATABASE: /data/mailpit.db
       MP_MAX_MESSAGES: 5000
     networks:
-      - app_network
-      - keycloak_network
+      - api_network
+      - auth_network
 
-  keycloak:
+  auth:
     depends_on:
-      mailpit:
+      mail:
         condition: service_started
 
 volumes:
-  mailpit_data:
+  mail_data:

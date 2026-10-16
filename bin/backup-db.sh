@@ -16,7 +16,7 @@ dump() {
   echo "wrote $target/$service.sql.gz"
 }
 
-dump mysql-app MYSQL_APP_ROOT_PASSWORD
-dump mysql-keycloak MYSQL_KEYCLOAK_ROOT_PASSWORD
+dump mysql-api MYSQL_API_ROOT_PASSWORD
+dump mysql-auth MYSQL_AUTH_ROOT_PASSWORD
 
 find backups -mindepth 1 -maxdepth 1 -type d -mtime "+$keep_days" -exec rm -rf {} +

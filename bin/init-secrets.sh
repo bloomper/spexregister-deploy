@@ -17,14 +17,14 @@ generate() {
 
 random() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
 
-generate MYSQL_APP_ROOT_PASSWORD "$(random 32)"
-generate MYSQL_APP_USER_PASSWORD "$(random 32)"
-generate MYSQL_KEYCLOAK_ROOT_PASSWORD "$(random 32)"
-generate MYSQL_KEYCLOAK_USER_PASSWORD "$(random 32)"
-generate KEYCLOAK_ADMIN_PASSWORD "$(random 24)"
-generate APP_KEYCLOAK_ADMIN_CLIENT_SECRET "$(random 32)"
-generate APP_KEYCLOAK_CLIENT_CLIENT_SECRET "$(random 32)"
-generate APP_SECRET_KEY "$(random 32)"
+generate MYSQL_API_ROOT_PASSWORD "$(random 32)"
+generate MYSQL_API_USER_PASSWORD "$(random 32)"
+generate MYSQL_AUTH_ROOT_PASSWORD "$(random 32)"
+generate MYSQL_AUTH_USER_PASSWORD "$(random 32)"
+generate AUTH_ADMIN_PASSWORD "$(random 24)"
+generate API_AUTH_ADMIN_CLIENT_SECRET "$(random 32)"
+generate API_AUTH_CLIENT_CLIENT_SECRET "$(random 32)"
+generate API_SECRET_KEY "$(random 32)"
 generate WEB_AUTH_SECRET "$(random 48)"
 generate SAMPLE_USER_PASSWORD "$(random 16)"
 

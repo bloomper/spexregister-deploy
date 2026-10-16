@@ -5,13 +5,13 @@ through a Cloudflare Tunnel. The host needs no open inbound ports and no reverse
 out to Cloudflare, which terminates TLS and forwards each public hostname to a container.
 
 ```
-Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ web:3000        (WEB_HOST)
-                                                       ├─▶ keycloak:8080   (AUTH_HOST)
-                                                       ├─▶ app:8080        (API_HOST, optional)
-                                                       └─▶ mailpit:8025    (MAIL_HOST, staging only)
+Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ web:3000   (WEB_HOST)
+                                                       ├─▶ auth:8080  (AUTH_HOST)
+                                                       ├─▶ api:8080   (API_HOST, optional)
+                                                       └─▶ mail:8025  (MAIL_HOST, staging only)
 
-web ──http──▶ app:8080 ──▶ mysql-app
-              app ──http──▶ keycloak:8080 ──▶ mysql-keycloak
+web ──http──▶ api:8080 ──▶ mysql-api
+              api ──http──▶ auth:8080 ──▶ mysql-auth
 ```
 
 The web talks to the API over the internal Docker network. Only Keycloak has to be public for login. The API
@@ -37,9 +37,9 @@ Every service runs from a published image, so the host needs only this repo:
 
 | `.env` variable  | Image                          | Source repo            |
 |------------------|--------------------------------|------------------------|
-| `APP_IMAGE`      | `bloomper/spexregister-server` | `spexregister-server`  |
+| `API_IMAGE`      | `bloomper/spexregister-server` | `spexregister-server`  |
 | `WEB_IMAGE`      | `bloomper/spexregister-web`    | `spexregister-web`     |
-| `KEYCLOAK_IMAGE` | `bloomper/fgv-keycloak`        | `fgv-keycloak`         |
+| `AUTH_IMAGE` | `bloomper/fgv-keycloak`        | `fgv-keycloak`         |
 
 The Keycloak image contains the SPI providers, the FGV theme and the realm import file `fgv.json`.
 
@@ -68,12 +68,12 @@ Universal SSL certificate doesn't cover it.
    Enter the hostname as subdomain plus domain, and the service in **Service URL**. Cloudflare creates the
    DNS records itself.
 
-   | Hostname     | Service URL            |
-   |--------------|------------------------|
-   | `WEB_HOST`   | `http://web:3000`      |
-   | `AUTH_HOST`  | `http://keycloak:8080` |
-   | `API_HOST`   | `http://app:8080`      |
-   | `MAIL_HOST`  | `http://mailpit:8025`  |
+   | Hostname     | Service URL        |
+   |--------------|--------------------|
+   | `WEB_HOST`   | `http://web:3000`  |
+   | `AUTH_HOST`  | `http://auth:8080` |
+   | `API_HOST`   | `http://api:8080`  |
+   | `MAIL_HOST`  | `http://mail:8025` |
 
 4. Restrict who can reach staging with Cloudflare Access. See *Cloudflare Access* below.
 5. Open *Turnstile* in the dashboard and select *Add widget*. Name it e.g. `spexregister-staging`, add `AUTH_HOST` as
@@ -117,24 +117,29 @@ cp staging.env.example .env               # set the hostnames, email addresses a
 bin/init-secrets.sh
 nano secrets/cloudflared.env              # TUNNEL_TOKEN=<token from step 2>
 printf '%s' '<secret key>' > secrets/TURNSTILE_SECRET_KEY
+mkdir -p data/api/log_data data/api/index_data data/api/impex_data
+sudo chown -R 1000:1000 data/api
 ```
+
+The `api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories before the
+first start: Docker would otherwise create them owned by root, and the `api` container couldn't write to them.
 
 ## 4. First start
 
 ```shell
-docker compose up -d keycloak             # also starts mysql-keycloak and mailpit
-docker compose ps keycloak                # wait for "healthy"
+docker compose up -d auth                 # also starts mysql-auth and mail
+docker compose ps auth                    # wait for "healthy"
 bin/configure-keycloak.sh
 docker compose up -d                      # starts the rest
-docker compose logs -f app                # sample data import takes a while
+docker compose logs -f api                # sample data import takes a while
 ```
 
 Keycloak imports `fgv.json` only when the realm doesn't exist yet. Then `configure-keycloak.sh` makes these
 changes:
 
-- sets the `fgv-admin` client secret to `secrets/APP_KEYCLOAK_ADMIN_CLIENT_SECRET`
-- sets the `spexregister` client secret to `secrets/APP_KEYCLOAK_CLIENT_CLIENT_SECRET`
-- selects `KEYCLOAK_THEME` as the realm's login, account and email theme
+- sets the `fgv-admin` client secret to `secrets/API_AUTH_ADMIN_CLIENT_SECRET`
+- sets the `spexregister` client secret to `secrets/API_AUTH_CLIENT_CLIENT_SECRET`
+- selects `AUTH_THEME` as the realm's login, account and email theme
 - sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
 
 You can run it again safely. Everything else comes from `fgv.json`, which reads the name and address of the web
@@ -142,12 +147,12 @@ client and the MCP endpoint from `SPEXREGISTER_NAME`, `SPEXREGISTER_URL` and `SP
 `compose.yaml` sets them from `WEB_NAME`, `WEB_HOST` and `API_HOST`. A new realm needs none of the scripts in
 `bin/migrations/`.
 
-With `APP_IMPORT_SAMPLE_DATA=true` the app replaces all data and all Keycloak users on every start. Besides
+With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data and all Keycloak users on every start. Besides
 random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
 has the password in `secrets/SAMPLE_USER_PASSWORD`.
 
-Keycloak admin console: `https://AUTH_HOST/auth/admin`, user `KEYCLOAK_ADMIN`, password in
-`secrets/KEYCLOAK_ADMIN_PASSWORD`.
+Keycloak admin console: `https://AUTH_HOST/auth/admin`, user `AUTH_ADMIN`, password in
+`secrets/AUTH_ADMIN_PASSWORD`.
 
 ### Passkeys
 
@@ -203,9 +208,9 @@ The scripts can be run again safely. Once every environment has run a script, de
 
 ## Mail
 
-Keycloak sends email verification, password reset and the approval notifications. The `app` service sends
-removal requests from users to `KEYCLOAK_ADMIN_NOTIFICATION_RECIPIENTS`. Both use the same settings. Staging sends
-all mail to Mailpit. For a real relay, set these in `.env`, run `bin/configure-keycloak.sh` and restart `app`:
+Keycloak sends email verification, password reset and the approval notifications. The `api` service sends
+removal requests from users to `AUTH_ADMIN_NOTIFICATION_RECIPIENTS`. Both use the same settings. Staging sends
+all mail to Mailpit. For a real relay, set these in `.env`, run `bin/configure-keycloak.sh` and restart `api`:
 
 | Variable        | Purpose                                                                  |
 |-----------------|--------------------------------------------------------------------------|
@@ -225,11 +230,12 @@ newline, e.g. `printf '%s' '<password>' > secrets/SMTP_PASSWORD`. Check the resu
 
 | Location                    | Contents                                   | Backup                                  |
 |-----------------------------|--------------------------------------------|-----------------------------------------|
-| volume `mysql_app_db_data`  | Application database                       | `bin/backup-db.sh`                      |
-| volume `mysql_keycloak_db_data` | Keycloak database (realm, users)       | `bin/backup-db.sh`                      |
-| `data/app/impex_data`       | Import and export files                    | copy the directory                      |
-| `data/app/log_data`         | Application logs                           | not needed                              |
-| `data/app/index_data`       | Search index, rebuilt from the database    | not needed                              |
+| volume `mysql_api_db_data`  | Application database                       | `bin/backup-db.sh`                      |
+| volume `mysql_auth_db_data` | Keycloak database (realm, users)           | `bin/backup-db.sh`                      |
+| volume `mail_data`          | Caught mail (staging only)                 | not needed                              |
+| `data/api/impex_data`       | Import and export files                    | copy the directory                      |
+| `data/api/log_data`         | Application logs                           | not needed                              |
+| `data/api/index_data`       | Search index, rebuilt from the database    | not needed                              |
 
 The databases stay in named volumes: copying the files of a running MySQL server doesn't give a consistent
 backup. `bin/backup-db.sh` uses `mysqldump --single-transaction` instead, which is consistent without stopping
@@ -245,39 +251,25 @@ with `rclone` or `rsync`; a backup on the same disk doesn't survive losing the d
 To restore a dump:
 
 ```shell
-gunzip -c backups/<timestamp>/mysql-app.sql.gz | docker compose exec -T mysql-app \
-  sh -c 'MYSQL_PWD=$(cat /run/secrets/MYSQL_APP_ROOT_PASSWORD) mysql -uroot "$MYSQL_DATABASE"'
+gunzip -c backups/<timestamp>/mysql-api.sql.gz | docker compose exec -T mysql-api \
+  sh -c 'MYSQL_PWD=$(cat /run/secrets/MYSQL_API_ROOT_PASSWORD) mysql -uroot "$MYSQL_DATABASE"'
 ```
 
-Use `mysql-keycloak` and `MYSQL_KEYCLOAK_ROOT_PASSWORD` for the Keycloak dump.
+Use `mysql-auth` and `MYSQL_AUTH_ROOT_PASSWORD` for the Keycloak dump.
 
-Apart from the app's own files in `data/app/log_data`, every service logs to the console only; read it with
+Apart from the app's own files in `data/api/log_data`, every service logs to the console only; read it with
 `docker compose logs -f <service>`. Each service keeps at most 5 × 10 MB of console output (`x-logging` in the
 compose files), so logs can't fill the disk.
 
-To force a new search index, either call `POST /api/admin/index/spexare` as an administrator, or stop `app`,
-empty `data/app/index_data` and start `app` again; it rebuilds an empty index on startup.
-
-### Moving from named volumes
-
-Hosts set up before `data/` existed keep the app's files in the volumes `app_log_data`, `app_index_data` and
-`app_impex_data`. Copy the import and export files over once, after `git pull`:
-
-```shell
-docker compose stop app
-mkdir -p data/app
-docker run --rm -v spexregister-${DEPLOY_ENV}_app_impex_data:/from -v "$PWD/data/app/impex_data":/to alpine cp -a /from/. /to/
-docker compose up -d app                  # rebuilds the index, logs start afresh
-docker volume rm spexregister-${DEPLOY_ENV}_app_log_data spexregister-${DEPLOY_ENV}_app_index_data spexregister-${DEPLOY_ENV}_app_impex_data
-```
-
-Set `DEPLOY_ENV` in the shell first, or write the volume names out (`docker volume ls`).
+To force a new search index, either run the GraphQL mutation `indexSpexare` or call `POST /api/admin/index/spexare`
+as an administrator, or stop `api`, empty `data/api/index_data` and start `api` again; it rebuilds an empty index
+on startup.
 
 ## Resetting staging data
 
 ```shell
-docker compose down -v                    # removes the volumes: databases, Keycloak realm, Mailpit
-rm -rf data/app                           # index, logs, import and export files
+docker compose down -v                    # removes the volumes: databases, Keycloak realm, mail
+rm -rf data/api                           # index, logs, import and export files
 ```
 
 Then repeat *First start*. The secrets in `secrets/` and the dumps in `backups/` are kept.
@@ -288,19 +280,19 @@ Then repeat *First start*. The secrets in `secrets/` and the dumps in `backups/`
 production also goes through a Cloudflare Tunnel, using its own tunnel and token. Leave it out if production
 sits behind its own reverse proxy instead. A production host would differ in these ways:
 
-- `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `APP_IMPORT_SAMPLE_DATA=false`,
-  `APP_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
+- `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `API_IMPORT_SAMPLE_DATA=false`,
+  `API_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
   placeholders)
 - no sample users: the realm in the Keycloak image contains none, and only the sample data import creates them
-- `APP_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
-  `docker compose up -d app`. That gives every existing row a baseline revision. The app seeds only while the
+- `API_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
+  `docker compose up -d api`. That gives every existing row a baseline revision. The app seeds only while the
   change log is empty, so the flag can stay on afterwards
 - `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
-- `APP_IMAGE`, `WEB_IMAGE` and `KEYCLOAK_IMAGE` pinned to release versions, e.g.
+- `API_IMAGE`, `WEB_IMAGE` and `AUTH_IMAGE` pinned to release versions, e.g.
   `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of
   `latest`, so that an update happens only when `.env` changes
 
-Running both databases in one MySQL server would mean pointing `KC_DB_URL` at `mysql-app` and creating the
+Running both databases in one MySQL server would mean pointing `KC_DB_URL` at `mysql-api` and creating the
 Keycloak database and user with an init script. Two servers keep the realm and application data independently
 restorable.
 
