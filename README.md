@@ -39,7 +39,7 @@ Every service runs from a published image, so the host needs only this repo:
 |------------------|--------------------------------|------------------------|
 | `API_IMAGE`      | `bloomper/spexregister-server` | `spexregister-server`  |
 | `WEB_IMAGE`      | `bloomper/spexregister-web`    | `spexregister-web`     |
-| `AUTH_IMAGE` | `bloomper/fgv-keycloak`        | `fgv-keycloak`         |
+| `AUTH_IMAGE`     | `bloomper/fgv-keycloak`        | `fgv-keycloak`         |
 
 The Keycloak image contains the SPI providers, the FGV theme and the realm import file `fgv.json`.
 
@@ -195,11 +195,12 @@ The scripts can be run again safely. Once every environment has run a script, de
 
 `2026-10-15-security-passkeys-turnstile.sh`:
 
+- removes the redirect URIs and web origins of the `fgv-admin` client, which only uses its service account
 - names the `spexregister` client `WEB_NAME` and points it at `https://WEB_HOST`, with only the web's login callback
   as redirect URI, PKCE required and no direct access grants
 - makes users consent before an MCP client gets access, and adds `https://API_HOST/api/mcp` as audience to MCP
   tokens. The app rejects MCP tokens without it
-- turns on brute force protection, the password policy (at least 12 characters, not the email address), login and
+- turns on brute force protection, the password policy (12 to 128 characters, not the username or email address), login and
   admin events (kept 30 days), a 60-day limit on offline sessions and passkeys
 - requires a Turnstile challenge on registration, through a copy of the registration flow called `fgv registration`
 - skips OTP when a user signs in with a passkey, through a copy of the browser flow called `fgv browser`
