@@ -1,21 +1,28 @@
 # Spexregister Deploy
 
-Docker Compose setup for running Spexregister (server, web, Keycloak, MySQL) on a single host, published
-through a Cloudflare Tunnel. The host needs no open inbound ports and no reverse proxy: `cloudflared` dials
-out to Cloudflare, which terminates TLS and forwards each public hostname to a container.
+Docker Compose setup for running Spexregister (server, web, MySQL) on a single host, published through a
+Cloudflare Tunnel. The host needs no open inbound ports and no reverse proxy: `cloudflared` dials out to
+Cloudflare, which terminates TLS and forwards each public hostname to a container.
+
+Keycloak runs from [fgv-infra-deploy][1] on the same host, because Nyuppsättning logs in through the same realm.
+Set it up first.
 
 ```
-Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ web:3000   (WEB_HOST)
-                                                       ├─▶ auth:8080  (AUTH_HOST)
-                                                       ├─▶ api:8080   (API_HOST, optional)
-                                                       └─▶ mail:8025  (MAIL_HOST, staging only)
+Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ spexregister-web:3000   (WEB_HOST)
+                                                       └─▶ spexregister-api:8080   (API_HOST, optional)
 
-web ──http──▶ api:8080 ──▶ mysql-api
-              api ──http──▶ auth:8080 ──▶ mysql-auth
+spexregister-web ──http──▶ spexregister-api:8080 ──▶ spexregister-mysql
+                           spexregister-api ──http──▶ keycloak-server:8080   (network fgv-<DEPLOY_ENV>)
+fgv-revival-deploy's revival-api ──http──▶ spexregister-api:8080     (same network)
 ```
 
-The web talks to the API over the internal Docker network. Only Keycloak has to be public for login. The API
-hostname is needed only for MCP clients and `/docs`.
+The web talks to the API over this project's default network. The API also joins the network `fgv-<DEPLOY_ENV>`,
+which `fgv-infra-deploy` creates, to reach Keycloak's signing keys and admin API and, on staging, Mailpit. FGV
+Revival's server reads spexes from the API there as `spexregister-api`. Browsers and the web reach Keycloak at its
+public `KEYCLOAK_HOST`. The API hostname is needed only for MCP clients and `/docs`.
+
+Every service is named after its application and role, as in `fgv-infra-deploy` and `fgv-revival-deploy`, so
+names on the shared network say where they come from.
 
 ## Files
 
@@ -23,13 +30,10 @@ hostname is needed only for MCP clients and `/docs`.
 |-------------------------------|----------------------------------------------------------------------------|
 | `compose.yaml`                | Services shared by every environment, configured entirely from `.env`      |
 | `compose.tunnel.yaml`         | `cloudflared` connector, for hosts published through a Cloudflare Tunnel   |
-| `compose.staging.yaml`        | Staging additions: Mailpit catches all outgoing mail                       |
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
 | `production.env.example`      | Template for `.env` on the production host                                 |
-| `bin/init-secrets.sh`         | Generates random secrets into `secrets/` (never overwrites existing ones)  |
-| `bin/configure-keycloak.sh`   | Sets client secrets, theme and mail settings in a new Keycloak realm       |
-| `bin/migrations/`             | Dated one-off scripts that bring an existing realm up to date              |
-| `bin/backup-db.sh`            | Dumps both databases into `backups/`, pruning dumps older than 14 days     |
+| `bin/init-secrets.sh`         | Generates random secrets into `secrets/` and copies the client secrets from `fgv-infra-deploy` (never overwrites existing ones) |
+| `bin/backup-db.sh`            | Dumps the database into `backups/`, pruning dumps older than 14 days       |
 
 `COMPOSE_FILE` in `.env` selects the overlays, so plain `docker compose ...` commands work on each host.
 
@@ -39,22 +43,11 @@ Every service runs from a published image, so the host needs only this repo:
 |------------------|--------------------------------|------------------------|
 | `API_IMAGE`      | `bloomper/spexregister-server` | `spexregister-server`  |
 | `WEB_IMAGE`      | `bloomper/spexregister-web`    | `spexregister-web`     |
-| `AUTH_IMAGE`     | `bloomper/fgv-keycloak`        | `fgv-keycloak`         |
-
-The Keycloak image contains the SPI providers, the FGV theme and the realm import file `fgv.json`.
 
 ## 1. Host
 
-Ubuntu Server 26.04 LTS (or Debian 13) on the server. Install without a desktop, enable OpenSSH, then:
-
-```shell
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"            # log out and in again
-sudo apt install -y unattended-upgrades git
-```
-
-In BIOS, set *Power → After Power Loss* to *Power On* so the box comes back after a power cut. All containers
-use `restart: unless-stopped`.
+Set up the host and Keycloak as [fgv-infra-deploy][1] describes. Keycloak must be running before the first start
+below.
 
 ## 2. Cloudflare
 
@@ -62,48 +55,34 @@ The domain's DNS must be hosted on Cloudflare. Use single-level subdomains such 
 `register-staging.example.org`. A name like `api.register.example.org` is two levels deep, and the free
 Universal SSL certificate doesn't cover it.
 
-1. Networking → Tunnels → *Create a tunnel* → Cloudflared. Name it e.g. `spexregister-staging`.
+1. Networking → Tunnels → *Create a tunnel* → Cloudflared. Name it e.g. `fgv-spexregister-staging`.
+   Keycloak has its own tunnel.
 2. Copy the token from the install command (the long string after `--token`).
 3. On the tunnel's **Routes** tab, select *Add route* → *Published application* once for each row below.
    Enter the hostname as subdomain plus domain, and the service in **Service URL**. Cloudflare creates the
    DNS records itself.
 
-   | Hostname     | Service URL        |
-   |--------------|--------------------|
-   | `WEB_HOST`   | `http://web:3000`  |
-   | `AUTH_HOST`  | `http://auth:8080` |
-   | `API_HOST`   | `http://api:8080`  |
-   | `MAIL_HOST`  | `http://mail:8025` |
+   | Hostname     | Service URL                     |
+   |--------------|---------------------------------|
+   | `WEB_HOST`   | `http://spexregister-web:3000`  |
+   | `API_HOST`   | `http://spexregister-api:8080`  |
 
 4. Restrict who can reach staging with Cloudflare Access. See *Cloudflare Access* below.
-5. Open *Turnstile* in the dashboard and select *Add widget*. Name it e.g. `spexregister-staging`, add `AUTH_HOST` as
-   hostname and choose *Managed* as widget mode. Put the site key in `TURNSTILE_SITE_KEY` in `.env` and the
-   secret key in `secrets/TURNSTILE_SECRET_KEY` (see section 3 below).
 
 ### Cloudflare Access
 
-Access puts a Cloudflare login in front of a hostname or path before any request reaches the tunnel. The Free
-plan covers up to 50 users. Visitors log in with a one-time PIN sent to their email, so they need no account.
-
-**One-time setup:** open **Zero Trust** in the dashboard. On first use you're asked for a team name (becomes
-`<team>.cloudflareaccess.com`) and a plan; choose Free. A payment method may be required even on Free. Check
-that **One-time PIN** is listed as a login method under **Integrations → Identity providers**, and add it if
-not.
+Access puts a Cloudflare login in front of a hostname or path before any request reaches the tunnel. The one-time
+setup of Zero Trust is described in `fgv-infra-deploy`'s README.
 
 **Applications:** go to **Zero Trust → Access controls → Applications → Add an application → Self-hosted**.
 An application with no policy denies everyone.
 
 | Application            | Destinations                                | Allow policy                          |
 |------------------------|---------------------------------------------|---------------------------------------|
-| Spexregister admin     | `MAIL_HOST`, `AUTH_HOST` with path `auth/admin` | *Emails*: your own address        |
 | Spexregister staging   | `WEB_HOST`                                  | *Emails*: testers, or *Emails ending in*: a domain |
 
-Leave the rest of `AUTH_HOST` and all of `API_HOST` unprotected:
-
-- **`AUTH_HOST` outside `/auth/admin`:** the `web` container calls Keycloak's token and userinfo endpoints
-  server-side through `https://AUTH_HOST`. It has no Access cookie, so login breaks if Access covers those
-  paths.
-- **`API_HOST`:** MCP clients can't complete an Access login. The API already requires a Keycloak token.
+Leave `API_HOST` unprotected: MCP clients can't complete an Access login, and the API already requires a Keycloak
+token.
 
 Testers then go through two logins: the Access PIN for `WEB_HOST`, then their Keycloak user.
 
@@ -113,105 +92,49 @@ Testers then go through two logins: the Access PIN for `WEB_HOST`, then their Ke
 git clone https://github.com/bloomper/spexregister-deploy.git
 cd spexregister-deploy
 
-cp staging.env.example .env               # set the hostnames, email addresses and TURNSTILE_SITE_KEY
-bin/init-secrets.sh
+cp staging.env.example .env               # set the hostnames and email addresses
+bin/init-secrets.sh                       # copies the client secrets from ../fgv-infra-deploy
 nano secrets/cloudflared.env              # TUNNEL_TOKEN=<token from step 2>
-printf '%s' '<secret key>' > secrets/TURNSTILE_SECRET_KEY
 mkdir -p data/api/log_data data/api/index_data data/api/impex_data
 sudo chown -R 1000:1000 data/api
 ```
 
-The `api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories before the
-first start: Docker would otherwise create them owned by root, and the `api` container couldn't write to them.
+`bin/init-secrets.sh` copies the `fgv-admin` and `spexregister` client secrets from
+`../fgv-infra-deploy/secrets/clients/`. Set `INFRA_DEPLOY` to its path if it is checked out elsewhere.
+
+The `spexregister-api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories
+before the first start: Docker would otherwise create them owned by root, and the container couldn't write to them.
 
 ## 4. First start
 
 ```shell
-docker compose up -d auth                 # also starts mysql-auth and mail
-docker compose ps auth                    # wait for "healthy"
-bin/configure-keycloak.sh
-docker compose up -d                      # starts the rest
-docker compose logs -f api                # sample data import takes a while
+docker compose up -d
+docker compose logs -f spexregister-api   # sample data import takes a while
 ```
-
-Keycloak imports `fgv.json` only when the realm doesn't exist yet. Then `configure-keycloak.sh` makes these
-changes:
-
-- sets the `fgv-admin` client secret to `secrets/API_AUTH_ADMIN_CLIENT_SECRET`
-- sets the `spexregister` client secret to `secrets/API_AUTH_CLIENT_CLIENT_SECRET`
-- selects `AUTH_THEME` as the realm's login, account and email theme
-- sets the realm's mail settings from the `SMTP_*` variables, `MAIL_FROM` and `secrets/SMTP_PASSWORD`
-
-You can run it again safely. Everything else comes from `fgv.json`, which reads the name and address of the web
-client and the MCP endpoint from `SPEXREGISTER_NAME`, `SPEXREGISTER_URL` and `SPEXREGISTER_MCP_URL`.
-`compose.yaml` sets them from `WEB_NAME`, `WEB_HOST` and `API_HOST`. A new realm needs none of the scripts in
-`bin/migrations/`.
 
 With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data and all Keycloak users on every start. Besides
 random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
 has the password in `secrets/SAMPLE_USER_PASSWORD`.
-
-Keycloak admin console: `https://AUTH_HOST/auth/admin`, user `AUTH_ADMIN`, password in
-`secrets/AUTH_ADMIN_PASSWORD`.
-
-### Passkeys
-
-Users add a passkey under *Signing in* in the account console (`https://AUTH_HOST/auth/realms/fgv/account`) and
-can then sign in with it instead of a password. Passkeys are bound to `AUTH_HOST`, so changing that hostname
-makes every registered passkey unusable.
-
-### Registration CAPTCHA
-
-New users solve a Cloudflare Turnstile challenge on the registration page. Without `TURNSTILE_SITE_KEY` or
-`secrets/TURNSTILE_SECRET_KEY`, Keycloak logs a warning at start and registration has no CAPTCHA. Cloudflare's
-test keys `1x00000000000000000000AA` (site key) and `1x0000000000000000000000000000000AA` (secret key) always pass
-and work on any hostname.
 
 ## Updating
 
 ```shell
 git pull
 docker compose pull
-docker compose up -d
+docker compose up -d --remove-orphans
 ```
 
-Containers whose image changed are recreated. A new `fgv.json` in the Keycloak image doesn't change an existing
-realm, because Keycloak imports it only when the realm doesn't exist yet.
+Containers whose image changed are recreated, and containers of services that were removed from `compose.yaml` are
+deleted. When an update adds a secret or a variable, compare `.env` with the example file, then run
+`bin/init-secrets.sh` again. It doesn't overwrite existing secrets.
 
-When an update adds a secret or a variable, compare `.env` with the example file, then run `bin/init-secrets.sh`
-and `bin/configure-keycloak.sh` again. Neither overwrites an existing secret.
-
-### Keycloak migrations
-
-A change to `fgv.json` reaches only realms created after it. For realms that already exist, the change comes with
-a script in `bin/migrations/`, named after the date it was added. Run every script that is newer than the realm, in
-date order, after `docker compose up -d`:
-
-```shell
-bin/migrations/2026-10-15-security-passkeys-turnstile.sh
-```
-
-The scripts can be run again safely. Once every environment has run a script, delete it; git history keeps it.
-
-`2026-10-15-security-passkeys-turnstile.sh`:
-
-- removes the redirect URIs and web origins of the `fgv-admin` client, which only uses its service account
-- names the `spexregister` client `WEB_NAME` and points it at `https://WEB_HOST`, with only the web's login callback
-  as redirect URI, PKCE required and no direct access grants
-- makes users consent before an MCP client gets access, and adds `https://API_HOST/api/mcp` as audience to MCP
-  tokens. The app rejects MCP tokens without it
-- turns on brute force protection, the password policy (12 to 128 characters, not the username or email address), login and
-  admin events (kept 30 days), a 60-day limit on offline sessions and passkeys
-- requires a Turnstile challenge on registration, through a copy of the registration flow called `fgv registration`
-- skips OTP when a user signs in with a passkey, through a copy of the browser flow called `fgv browser`
-- replaces the realm keys that earlier versions of `fgv.json` contained, and so were public. This signs everyone
-  out once
+Keycloak and its realm are updated with `fgv-infra-deploy`.
 
 ## Mail
 
-Keycloak sends email verification, password reset and the approval notifications. The `api` service sends
-removal requests from users to `AUTH_ADMIN_NOTIFICATION_RECIPIENTS`. Both use the same settings. Staging sends
-all mail to Mailpit. For a real relay, set these in `.env`, run `bin/configure-keycloak.sh` and restart `api`:
+The `spexregister-api` service sends removal requests from users to `ADMIN_NOTIFICATION_RECIPIENTS`. Staging sends
+it to Mailpit, run by `fgv-infra-deploy` as `mailpit` on the shared network. For a real relay, set these in
+`.env` and restart `spexregister-api`. Keycloak's own mail settings are in `fgv-infra-deploy`:
 
 | Variable        | Purpose                                                                  |
 |-----------------|--------------------------------------------------------------------------|
@@ -224,16 +147,13 @@ all mail to Mailpit. For a real relay, set these in `.env`, run `bin/configure-k
 | `MAIL_FROM`     | Sender address                                                           |
 
 `bin/init-secrets.sh` creates `secrets/SMTP_PASSWORD` empty. Write the password into it without a trailing
-newline, e.g. `printf '%s' '<password>' > secrets/SMTP_PASSWORD`. Check the result with *Test connection* under
-*Realm settings → Email* in the admin console.
+newline, e.g. `printf '%s' '<password>' > secrets/SMTP_PASSWORD`.
 
 ## Data and backups
 
 | Location                    | Contents                                   | Backup                                  |
 |-----------------------------|--------------------------------------------|-----------------------------------------|
-| volume `mysql_api_db_data`  | Application database                       | `bin/backup-db.sh`                      |
-| volume `mysql_auth_db_data` | Keycloak database (realm, users)           | `bin/backup-db.sh`                      |
-| volume `mail_data`          | Caught mail (staging only)                 | not needed                              |
+| volume `mysql_data`         | Application database                       | `bin/backup-db.sh`                      |
 | `data/api/impex_data`       | Import and export files                    | copy the directory                      |
 | `data/api/log_data`         | Application logs                           | not needed                              |
 | `data/api/index_data`       | Search index, rebuilt from the database    | not needed                              |
@@ -252,50 +172,46 @@ with `rclone` or `rsync`; a backup on the same disk doesn't survive losing the d
 To restore a dump:
 
 ```shell
-gunzip -c backups/<timestamp>/mysql-api.sql.gz | docker compose exec -T mysql-api \
-  sh -c 'MYSQL_PWD=$(cat /run/secrets/MYSQL_API_ROOT_PASSWORD) mysql -uroot "$MYSQL_DATABASE"'
+gunzip -c backups/<timestamp>/spexregister-mysql.sql.gz | docker compose exec -T spexregister-mysql \
+  sh -c 'MYSQL_PWD=$(cat /run/secrets/MYSQL_ROOT_PASSWORD) mysql -uroot "$MYSQL_DATABASE"'
 ```
-
-Use `mysql-auth` and `MYSQL_AUTH_ROOT_PASSWORD` for the Keycloak dump.
 
 Apart from the app's own files in `data/api/log_data`, every service logs to the console only; read it with
 `docker compose logs -f <service>`. Each service keeps at most 5 × 10 MB of console output (`x-logging` in the
 compose files), so logs can't fill the disk.
 
 To force a new search index, either run the GraphQL mutation `indexSpexare` or call `POST /api/admin/index/spexare`
-as an administrator, or stop `api`, empty `data/api/index_data` and start `api` again; it rebuilds an empty index
-on startup.
+as an administrator, or stop `spexregister-api`, empty `data/api/index_data` and start it again; it rebuilds an
+empty index on startup.
 
 ## Resetting staging data
 
 ```shell
-docker compose down -v                    # removes the volumes: databases, Keycloak realm, mail
+docker compose down -v                    # removes the database volume
 rm -rf data/api                           # index, logs, import and export files
 ```
 
-Then repeat *First start*. The secrets in `secrets/` and the dumps in `backups/` are kept.
+Then repeat *First start*. With `API_IMPORT_SAMPLE_DATA=true` the sample data import also replaces the Keycloak
+users. To reset the realm as well, see `fgv-infra-deploy`. The secrets in `secrets/` and the dumps in `backups/`
+are kept.
 
 ## Production
 
-`compose.yaml` holds everything that isn't staging-specific. Add `compose.tunnel.yaml` to `COMPOSE_FILE` if
+Staging and production use the same `compose.yaml`; they differ only in `.env`. Add `compose.tunnel.yaml` to `COMPOSE_FILE` if
 production also goes through a Cloudflare Tunnel, using its own tunnel and token. Leave it out if production
 sits behind its own reverse proxy instead. A production host would differ in these ways:
 
 - `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `API_IMPORT_SAMPLE_DATA=false`,
   `API_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
   placeholders)
-- no sample users: the realm in the Keycloak image contains none, and only the sample data import creates them
+- no sample users: only the sample data import creates them
 - `API_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
-  `docker compose up -d api`. That gives every existing row a baseline revision. The app seeds only while the
+  `docker compose up -d spexregister-api`. That gives every existing row a baseline revision. The app seeds only while the
   change log is empty, so the flag can stay on afterwards
 - `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
-- `API_IMAGE`, `WEB_IMAGE` and `AUTH_IMAGE` pinned to release versions, e.g.
+- `API_IMAGE` and `WEB_IMAGE` pinned to release versions, e.g.
   `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of
   `latest`, so that an update happens only when `.env` changes
-
-Running both databases in one MySQL server would mean pointing `KC_DB_URL` at `mysql-api` and creating the
-Keycloak database and user with an init script. Two servers keep the realm and application data independently
-restorable.
 
 ## Image tags
 
@@ -314,4 +230,6 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
 The build fails if the tag doesn't match the version or if `X.Y.Z` is already on Docker Hub, so release tags
-are never overwritten. `fgv-keycloak` has no version file: its tag is the version.
+are never overwritten.
+
+[1]: https://github.com/bloomper/fgv-infra-deploy

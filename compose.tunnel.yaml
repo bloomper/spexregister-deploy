@@ -12,5 +12,3 @@ services:
       - ./secrets/cloudflared.env
     restart: unless-stopped
     logging: *logging
-    networks:
-      - api_network
