@@ -1,4 +1,4 @@
-name: spexregister-${DEPLOY_ENV:?DEPLOY_ENV must be set in .env}
+name: fgv-spexregister-${DEPLOY_ENV:?DEPLOY_ENV must be set in .env}
 
 x-logging: &logging
   driver: json-file
@@ -7,13 +7,13 @@ x-logging: &logging
     max-file: "5"
 
 services:
-  mysql-api:
+  spexregister-mysql:
     image: ${MYSQL_IMAGE:-mysql:8.4}
     environment:
-      MYSQL_DATABASE: ${MYSQL_API_DATABASE}
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_API_ROOT_PASSWORD
-      MYSQL_USER: ${MYSQL_API_USER}
-      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_API_USER_PASSWORD
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_ROOT_PASSWORD
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_USER_PASSWORD
     restart: unless-stopped
     logging: *logging
     healthcheck:
@@ -23,109 +23,28 @@ services:
       retries: 10
       start_period: 30s
     volumes:
-      - mysql_api_db_data:/var/lib/mysql
-    networks:
-      - api_network
+      - mysql_data:/var/lib/mysql
     secrets:
-      - MYSQL_API_ROOT_PASSWORD
-      - MYSQL_API_USER_PASSWORD
+      - MYSQL_ROOT_PASSWORD
+      - MYSQL_USER_PASSWORD
 
-  mysql-auth:
-    image: ${MYSQL_IMAGE:-mysql:8.4}
-    environment:
-      MYSQL_DATABASE: ${MYSQL_AUTH_DATABASE}
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_AUTH_ROOT_PASSWORD
-      MYSQL_USER: ${MYSQL_AUTH_USER}
-      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_AUTH_USER_PASSWORD
-    restart: unless-stopped
-    logging: *logging
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    volumes:
-      - mysql_auth_db_data:/var/lib/mysql
-    networks:
-      - auth_network
-    secrets:
-      - MYSQL_AUTH_ROOT_PASSWORD
-      - MYSQL_AUTH_USER_PASSWORD
-
-  auth:
-    image: ${AUTH_IMAGE:?AUTH_IMAGE must be set in .env}
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        export KC_DB_PASSWORD=$$(cat /run/secrets/MYSQL_AUTH_USER_PASSWORD)
-        export KC_BOOTSTRAP_ADMIN_PASSWORD=$$(cat /run/secrets/AUTH_ADMIN_PASSWORD)
-        export SMTP_PASSWORD=$$(cat /run/secrets/SMTP_PASSWORD)
-        export KC_SPI_FORM_ACTION__FGV_TURNSTILE__SECRET_KEY=$$(cat /run/secrets/TURNSTILE_SECRET_KEY)
-        exec /opt/keycloak/bin/kc.sh start --import-realm
-    environment:
-      KC_HOSTNAME: https://${AUTH_HOST}/auth
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: true
-      KC_HTTP_ENABLED: true
-      KC_HTTP_PORT: 8080
-      KC_HTTP_RELATIVE_PATH: /auth
-      KC_PROXY_HEADERS: xforwarded
-      KC_HEALTH_ENABLED: true
-      KC_METRICS_ENABLED: true
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${AUTH_ADMIN}
-      KC_LOG_LEVEL: info
-      KC_DB: mysql
-      KC_DB_URL: jdbc:mysql://mysql-auth/${MYSQL_AUTH_DATABASE}
-      KC_DB_USERNAME: ${MYSQL_AUTH_USER}
-      KC_SPI_EVENTS_LISTENER__FGV_ADMIN_NOTIFICATION__RECIPIENTS: ${AUTH_ADMIN_NOTIFICATION_RECIPIENTS}
-      KC_SPI_FORM_ACTION__FGV_TURNSTILE__SITE_KEY: ${TURNSTILE_SITE_KEY:-}
-      SPEXREGISTER_NAME: ${WEB_NAME:-Spexregister}
-      SPEXREGISTER_URL: https://${WEB_HOST}
-      SPEXREGISTER_MCP_URL: https://${API_HOST}/api/mcp
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_FROM: ${MAIL_FROM}
-      SMTP_AUTH: ${SMTP_AUTH:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
-      SMTP_SSL: ${SMTP_SSL:-false}
-    restart: unless-stopped
-    logging: *logging
-    healthcheck:
-      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /auth/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep \"HTTP/1.1 200 OK\" <&3" ]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-    depends_on:
-      mysql-auth:
-        condition: service_healthy
-    networks:
-      - api_network
-      - auth_network
-    secrets:
-      - MYSQL_AUTH_USER_PASSWORD
-      - AUTH_ADMIN_PASSWORD
-      - SMTP_PASSWORD
-      - TURNSTILE_SECRET_KEY
-
-  api:
+  spexregister-api:
     image: ${API_IMAGE:?API_IMAGE must be set in .env}
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-api/${MYSQL_API_DATABASE}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_API_USER}
+      SPRING_DATASOURCE_URL: jdbc:mysql://spexregister-mysql/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_DIRECTORY_ROOT: /data/index_data
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://auth:8080/auth/realms/${API_AUTH_REALM}/protocol/openid-connect/certs
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${AUTH_HOST}/auth/realms/${API_AUTH_REALM}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak-server:8080/auth/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
       SPEXREGISTER_IMPEX_STORAGE_PATH: /data/impex_data
       LOGGING_FILE_PATH: /data/log_data
       SERVER_FORWARD_HEADERS_STRATEGY: native
       API_BASE_URL: https://${API_HOST}/api
-      API_AUTH_URL: http://auth:8080/auth
-      API_AUTH_REALM: ${API_AUTH_REALM}
-      API_AUTH_ADMIN_CLIENT_ID: ${API_AUTH_ADMIN_CLIENT_ID}
-      API_AUTH_CLIENT_CLIENT_ID: ${API_AUTH_CLIENT_CLIENT_ID}
+      API_KEYCLOAK_URL: http://keycloak-server:8080/auth
+      API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
+      API_KEYCLOAK_CLIENT_CLIENT_ID: spexregister
+      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA}
       SPRING_MAIL_HOST: ${SMTP_HOST}
@@ -135,7 +54,7 @@ services:
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS:-false}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE: ${SMTP_SSL:-false}
       MAIL_FROM: ${MAIL_FROM}
-      ADMIN_NOTIFICATION_RECIPIENTS: ${AUTH_ADMIN_NOTIFICATION_RECIPIENTS}
+      ADMIN_NOTIFICATION_RECIPIENTS: ${ADMIN_NOTIFICATION_RECIPIENTS}
     restart: unless-stopped
     logging: *logging
     healthcheck:
@@ -145,40 +64,42 @@ services:
       retries: 30
       start_period: 120s
     depends_on:
-      mysql-api:
-        condition: service_healthy
-      auth:
+      spexregister-mysql:
         condition: service_healthy
     volumes:
       - ./data/api/log_data:/data/log_data
       - ./data/api/index_data:/data/index_data
       - ./data/api/impex_data:/data/impex_data
     networks:
-      - api_network
+      - default
+      - fgv
+    # Mounted under the names the server's configuration reads
     secrets:
-      - MYSQL_API_USER_PASSWORD
-      - API_AUTH_ADMIN_CLIENT_SECRET
+      - source: MYSQL_USER_PASSWORD
+        target: MYSQL_API_USER_PASSWORD
+      - source: KEYCLOAK_ADMIN_CLIENT_SECRET
+        target: API_KEYCLOAK_ADMIN_CLIENT_SECRET
       - API_SECRET_KEY
       - SAMPLE_USER_PASSWORD
       - SMTP_PASSWORD
 
-  web:
+  spexregister-web:
     image: ${WEB_IMAGE:?WEB_IMAGE must be set in .env}
     command:
       - sh
       - -c
       - |
         export AUTH_SECRET=$$(cat /run/secrets/WEB_AUTH_SECRET)
-        export AUTH_KEYCLOAK_SECRET=$$(cat /run/secrets/API_AUTH_CLIENT_CLIENT_SECRET)
+        export KEYCLOAK_CLIENT_SECRET=$$(cat /run/secrets/KEYCLOAK_CLIENT_SECRET)
         exec node server.js
     environment:
       HOSTNAME: 0.0.0.0
       PORT: 3000
       BETTER_AUTH_URL: https://${WEB_HOST}
-      AUTH_KEYCLOAK_ID: ${API_AUTH_CLIENT_CLIENT_ID}
-      AUTH_KEYCLOAK_ISSUER: https://${AUTH_HOST}/auth/realms/${API_AUTH_REALM}
-      API_GRAPHQL_ENDPOINT: http://api:8080/api/graphql
-      API_REST_BASE_URL: http://api:8080
+      KEYCLOAK_CLIENT_ID: spexregister
+      KEYCLOAK_ISSUER: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
+      API_GRAPHQL_ENDPOINT: http://spexregister-api:8080/api/graphql
+      API_REST_BASE_URL: http://spexregister-api:8080
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
       SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
@@ -192,41 +113,33 @@ services:
       retries: 10
       start_period: 30s
     depends_on:
-      api:
+      spexregister-api:
         condition: service_healthy
-    networks:
-      - api_network
     secrets:
       - WEB_AUTH_SECRET
-      - API_AUTH_CLIENT_CLIENT_SECRET
+      - KEYCLOAK_CLIENT_SECRET
 
 volumes:
-  mysql_api_db_data:
-  mysql_auth_db_data:
+  mysql_data:
 
 networks:
-  api_network:
-  auth_network:
+  # Created by fgv-infra-deploy. Here spexregister-api reaches Keycloak as keycloak-server:8080, and FGV
+  # Revival reaches spexregister-api:8080
+  fgv:
+    name: fgv-${DEPLOY_ENV}
+    external: true
 
 secrets:
-  MYSQL_API_ROOT_PASSWORD:
-    file: ./secrets/MYSQL_API_ROOT_PASSWORD
-  MYSQL_API_USER_PASSWORD:
-    file: ./secrets/MYSQL_API_USER_PASSWORD
-  MYSQL_AUTH_ROOT_PASSWORD:
-    file: ./secrets/MYSQL_AUTH_ROOT_PASSWORD
-  MYSQL_AUTH_USER_PASSWORD:
-    file: ./secrets/MYSQL_AUTH_USER_PASSWORD
-  AUTH_ADMIN_PASSWORD:
-    file: ./secrets/AUTH_ADMIN_PASSWORD
+  MYSQL_ROOT_PASSWORD:
+    file: ./secrets/MYSQL_ROOT_PASSWORD
+  MYSQL_USER_PASSWORD:
+    file: ./secrets/MYSQL_USER_PASSWORD
   SMTP_PASSWORD:
     file: ./secrets/SMTP_PASSWORD
-  TURNSTILE_SECRET_KEY:
-    file: ./secrets/TURNSTILE_SECRET_KEY
-  API_AUTH_ADMIN_CLIENT_SECRET:
-    file: ./secrets/API_AUTH_ADMIN_CLIENT_SECRET
-  API_AUTH_CLIENT_CLIENT_SECRET:
-    file: ./secrets/API_AUTH_CLIENT_CLIENT_SECRET
+  KEYCLOAK_ADMIN_CLIENT_SECRET:
+    file: ./secrets/KEYCLOAK_ADMIN_CLIENT_SECRET
+  KEYCLOAK_CLIENT_SECRET:
+    file: ./secrets/KEYCLOAK_CLIENT_SECRET
   API_SECRET_KEY:
     file: ./secrets/API_SECRET_KEY
   WEB_AUTH_SECRET:
