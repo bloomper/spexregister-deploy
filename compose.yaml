@@ -73,7 +73,6 @@ services:
     networks:
       - default
       - fgv
-    # Mounted under the names the server's configuration reads
     secrets:
       - source: MYSQL_USER_PASSWORD
         target: MYSQL_API_USER_PASSWORD
@@ -104,6 +103,8 @@ services:
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
       SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
+      UMAMI_URL: http://umami-server:3000
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     restart: unless-stopped
     logging: *logging
     healthcheck:
@@ -115,6 +116,9 @@ services:
     depends_on:
       spexregister-api:
         condition: service_healthy
+    networks:
+      - default
+      - fgv
     secrets:
       - WEB_AUTH_SECRET
       - KEYCLOAK_CLIENT_SECRET
@@ -123,8 +127,6 @@ volumes:
   mysql_data:
 
 networks:
-  # Created by fgv-infra-deploy. Here spexregister-api reaches Keycloak as keycloak-server:8080, and FGV
-  # Revival reaches spexregister-api:8080
   fgv:
     name: fgv-${DEPLOY_ENV}
     external: true

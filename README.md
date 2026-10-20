@@ -12,13 +12,15 @@ Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬
                                                        └─▶ spexregister-api:8080   (API_HOST, optional)
 
 spexregister-web ──http──▶ spexregister-api:8080 ──▶ spexregister-mysql
-                           spexregister-api ──http──▶ keycloak-server:8080   (network fgv-<DEPLOY_ENV>)
+spexregister-web ──http──▶ umami-server:3000                       (network fgv-<DEPLOY_ENV>)
+                           spexregister-api ──http──▶ keycloak-server:8080   (same network)
 fgv-revival-deploy's revival-api ──http──▶ spexregister-api:8080     (same network)
 ```
 
 The web talks to the API over this project's default network. The API also joins the network `fgv-<DEPLOY_ENV>`,
 which `fgv-infra-deploy` creates, to reach Keycloak's signing keys and admin API and, on staging, Mailpit. FGV
-Revival's server reads spexes from the API there as `spexregister-api`. Browsers and the web reach Keycloak at its
+Revival's server reads spex from the API there as `spexregister-api`. The web joins it too, to forward its visitor
+statistics to Umami in `fgv-infra-deploy` as `umami-server`. Browsers and the web reach Keycloak at its
 public `KEYCLOAK_HOST`. The API hostname is needed only for MCP clients and `/docs`.
 
 Every service is named after its application and role, as in `fgv-infra-deploy` and `fgv-revival-deploy`, so
@@ -101,6 +103,10 @@ sudo chown -R 1000:1000 data/api
 
 `bin/init-secrets.sh` copies the `fgv-admin` and `spexregister` client secrets from
 `../fgv-infra-deploy/secrets/clients/`. Set `INFRA_DEPLOY` to its path if it is checked out elsewhere.
+
+For visitor statistics, add a website for `WEB_HOST` in `fgv-infra-deploy`'s Umami (see *Umami* in its README) and
+put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/script.js` and forwards events from
+`/stats/api/send`, so browsers only talk to `WEB_HOST`. Leave the ID empty to send nothing.
 
 The `spexregister-api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories
 before the first start: Docker would otherwise create them owned by root, and the container couldn't write to them.
