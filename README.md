@@ -18,8 +18,8 @@ fgv-revival-deploy's revival-api ──http──▶ spexregister-api:8080     (
 ```
 
 The web talks to the API over this project's default network. The API also joins the network `fgv-<DEPLOY_ENV>`,
-which `fgv-infra-deploy` creates, to reach Keycloak's signing keys and admin API and, on staging, Mailpit. FGV
-Revival's server reads spex from the API there as `spexregister-api`. The web joins it too, to forward its visitor
+which `fgv-infra-deploy` creates, to reach Keycloak's signing keys and admin API and, on staging, Mailpit.
+Nyuppsättning's server reads spex from the API there as `spexregister-api`. The web joins it too, to forward its visitor
 statistics to Umami in `fgv-infra-deploy` as `umami-server`. Browsers and the web reach Keycloak at its
 public `KEYCLOAK_HOST`. The API hostname is needed only for MCP clients and `/docs`.
 
@@ -203,9 +203,7 @@ are kept.
 
 ## Production
 
-Staging and production use the same `compose.yaml`; they differ only in `.env`. Add `compose.tunnel.yaml` to `COMPOSE_FILE` if
-production also goes through a Cloudflare Tunnel, using its own tunnel and token. Leave it out if production
-sits behind its own reverse proxy instead. A production host would differ in these ways:
+Staging and production use the same `compose.yaml`; they differ only in `.env`:
 
 - `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `API_IMPORT_SAMPLE_DATA=false`,
   `API_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
@@ -218,6 +216,17 @@ sits behind its own reverse proxy instead. A production host would differ in the
 - `API_IMAGE` and `WEB_IMAGE` pinned to release versions, e.g.
   `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of
   `latest`, so that an update happens only when `.env` changes
+
+Add `compose.tunnel.yaml` to `COMPOSE_FILE` if production also goes through a Cloudflare Tunnel, using its own tunnel
+and token. Leave it out if production sits behind its own reverse proxy instead.
+
+## Troubleshooting
+
+| Symptom                                           | Cause                                                       |
+|---------------------------------------------------|-------------------------------------------------------------|
+| `network fgv-<DEPLOY_ENV> declared as external, but could not be found` | `fgv-infra-deploy` isn't running, or uses another `DEPLOY_ENV` |
+| Login ends with "Invalid parameter: redirect_uri" | `SPEXREGISTER_WEB_HOST` in `fgv-infra-deploy` doesn't match `WEB_HOST` |
+| Login fails with `invalid_client` in the web's log | `secrets/KEYCLOAK_CLIENT_SECRET` differs from the realm; run `fgv-infra-deploy/bin/configure-keycloak.sh` |
 
 ## Image tags
 
