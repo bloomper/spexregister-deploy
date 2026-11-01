@@ -47,7 +47,7 @@ fi
 
 if [[ ! -s secrets/cloudflared.env ]]; then
   printf 'TUNNEL_TOKEN=\n' > secrets/cloudflared.env
-  echo "created secrets/cloudflared.env (paste the tunnel token into it)"
+  echo "created secrets/cloudflared.env (staging only: paste the tunnel token into it)"
 fi
 
 chmod 700 secrets

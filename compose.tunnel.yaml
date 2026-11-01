@@ -1,3 +1,5 @@
+# The Cloudflare Tunnel connector, used on staging only: production uses no Cloudflare and sits behind its own
+# reverse proxy.
 x-logging: &logging
   driver: json-file
   options:

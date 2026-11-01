@@ -44,7 +44,7 @@ services:
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
       API_KEYCLOAK_CLIENT_CLIENT_ID: spexregister
-      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service
+      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA}
       SPRING_MAIL_HOST: ${SMTP_HOST}

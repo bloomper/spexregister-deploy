@@ -1,13 +1,15 @@
 # Spexregister Deploy
 
-Docker Compose setup for running Spexregister (server, web, MySQL) on a single host, published through a
-Cloudflare Tunnel. The host needs no open inbound ports and no reverse proxy: `cloudflared` dials out to
-Cloudflare, which terminates TLS and forwards each public hostname to a container.
+Docker Compose setup for running Spexregister (server, web, MySQL) on a single host. Cloudflare is used on staging
+only: staging is published through a Cloudflare Tunnel, so that host needs no open inbound ports and no reverse proxy
+(`cloudflared` dials out to Cloudflare, which terminates TLS and forwards each public hostname to a container).
+Production uses no Cloudflare and sits behind its own reverse proxy (see *Production*).
 
 Keycloak runs from [fgv-infra-deploy][1] on the same host, because Nyuppsättning logs in through the same realm.
 Set it up first.
 
 ```
+Staging:
 Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ spexregister-web:3000   (WEB_HOST)
                                                        └─▶ spexregister-api:8080   (API_HOST, optional)
 
@@ -31,7 +33,7 @@ names on the shared network say where they come from.
 | File                          | Purpose                                                                    |
 |-------------------------------|----------------------------------------------------------------------------|
 | `compose.yaml`                | Services shared by every environment, configured entirely from `.env`      |
-| `compose.tunnel.yaml`         | `cloudflared` connector, for hosts published through a Cloudflare Tunnel   |
+| `compose.tunnel.yaml`         | `cloudflared` connector for the Cloudflare Tunnel, staging only            |
 | `staging.env.example`         | Template for `.env` on the staging host                                    |
 | `production.env.example`      | Template for `.env` on the production host                                 |
 | `bin/init-secrets.sh`         | Generates random secrets into `secrets/` and copies the client secrets from `fgv-infra-deploy` (never overwrites existing ones) |
@@ -51,9 +53,12 @@ Every service runs from a published image, so the host needs only this repo:
 Set up the host and Keycloak as [fgv-infra-deploy][1] describes. Keycloak must be running before the first start
 below.
 
-## 2. Cloudflare
+## 2. Cloudflare (staging only)
 
-The domain's DNS must be hosted on Cloudflare. Use single-level subdomains such as
+Only staging uses Cloudflare. On production, skip this section and point `WEB_HOST` and `API_HOST` at production's
+reverse proxy (see *Production*).
+
+Staging's DNS must be hosted on Cloudflare. Use single-level subdomains such as
 `register-staging.example.org`. A name like `api.register.example.org` is two levels deep, and the free
 Universal SSL certificate doesn't cover it.
 
@@ -69,7 +74,7 @@ Universal SSL certificate doesn't cover it.
    | `WEB_HOST`   | `http://spexregister-web:3000`  |
    | `API_HOST`   | `http://spexregister-api:8080`  |
 
-4. Restrict who can reach staging with Cloudflare Access. See *Cloudflare Access* below.
+4. Restrict who can reach staging with Cloudflare Access. See *Cloudflare Access* below. Production has no Access.
 
 ### Cloudflare Access
 
@@ -96,7 +101,7 @@ cd spexregister-deploy
 
 cp staging.env.example .env               # set the hostnames and email addresses
 bin/init-secrets.sh                       # copies the client secrets from ../fgv-infra-deploy
-nano secrets/cloudflared.env              # TUNNEL_TOKEN=<token from step 2>
+nano secrets/cloudflared.env              # staging only: TUNNEL_TOKEN=<token from step 2>
 mkdir -p data/api/log_data data/api/index_data data/api/impex_data
 sudo chown -R 1000:1000 data/api
 ```
@@ -214,11 +219,10 @@ Staging and production use the same `compose.yaml`; they differ only in `.env`:
   change log is empty, so the flag can stay on afterwards
 - `bin/backup-db.sh` scheduled in cron, with `backups/` copied to off-host storage
 - `API_IMAGE` and `WEB_IMAGE` pinned to release versions, e.g.
-  `bloomper/spexregister-server:2.0.0`, instead of `develop`, and `CLOUDFLARED_VERSION` pinned instead of
-  `latest`, so that an update happens only when `.env` changes
-
-Add `compose.tunnel.yaml` to `COMPOSE_FILE` if production also goes through a Cloudflare Tunnel, using its own tunnel
-and token. Leave it out if production sits behind its own reverse proxy instead.
+  `bloomper/spexregister-server:2.0.0`, instead of `develop`, so that an update happens only when `.env` changes
+- no Cloudflare: `COMPOSE_FILE` leaves out `compose.tunnel.yaml`, `secrets/cloudflared.env` stays empty, and there
+  is no Cloudflare Access. Production sits behind its own reverse proxy, which terminates TLS and forwards `WEB_HOST`
+  to `spexregister-web:3000` and `API_HOST` to `spexregister-api:8080` (the table in section 2)
 
 ## Troubleshooting
 
