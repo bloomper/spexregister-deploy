@@ -160,6 +160,21 @@ it to Mailpit, run by `fgv-infra-deploy` as `mailpit` on the shared network. For
 `bin/init-secrets.sh` creates `secrets/SMTP_PASSWORD` empty. Write the password into it without a trailing
 newline, e.g. `printf '%s' '<password>' > secrets/SMTP_PASSWORD`.
 
+## Map
+
+The spexare map gets its positions from the addresses, looked up with [Nominatim](https://nominatim.org), by default
+OpenStreetMap's free public instance. The API sends each spexare's chosen address (street, postal code, city, country)
+there, so it is off unless `API_GEOCODING_ENABLED=true`. Its [usage policy](https://operations.osmfoundation.org/policies/nominatim/)
+asks for a contact address, set in `API_GEOCODING_EMAIL`, and at most one request a second, which the API keeps to.
+
+The `geocode-addresses` job runs every hour and looks up at most 300 spexare whose address is new or changed, so the
+first runs take a day or so to place everyone. An administrator can start it by hand under *Administration →
+Maintenance*. `API_GEOCODING_URL` points it at another Nominatim, such as a self-hosted one. Staging keeps it off,
+since its sample addresses are made up.
+
+The map tiles load from `tile.openstreetmap.org` in the browser, under OpenStreetMap's
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+
 ## Data and backups
 
 | Location                    | Contents                                   | Backup                                  |
