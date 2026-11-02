@@ -47,6 +47,9 @@ services:
       SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA}
+      API_GEOCODING_ENABLED: ${API_GEOCODING_ENABLED:-false}
+      API_GEOCODING_EMAIL: ${API_GEOCODING_EMAIL:-}
+      API_GEOCODING_URL: ${API_GEOCODING_URL:-https://nominatim.openstreetmap.org}
       SPRING_MAIL_HOST: ${SMTP_HOST}
       SPRING_MAIL_PORT: ${SMTP_PORT}
       SPRING_MAIL_USERNAME: ${SMTP_USER:-}
