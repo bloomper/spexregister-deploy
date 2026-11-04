@@ -113,6 +113,10 @@ For visitor statistics, add a website for `WEB_HOST` in `fgv-infra-deploy`'s Uma
 put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/script.js` and forwards events from
 `/stats/api/send`, so browsers only talk to `WEB_HOST`. Leave the ID empty to send nothing.
 
+`FGV_REVIVAL_WEB_URL`, `SPEXIFY_WEB_URL` and `SPEXFLIX_WEB_URL` are the other applications' web addresses. The
+web's header lists each one that is set, and that the user can open, in its application switcher. Leave one empty
+to leave it out.
+
 The `spexregister-api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories
 before the first start: Docker would otherwise create them owned by root, and the container couldn't write to them.
 
