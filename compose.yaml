@@ -102,6 +102,9 @@ services:
       KEYCLOAK_ISSUER: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
       API_GRAPHQL_ENDPOINT: http://spexregister-api:8080/api/graphql
       API_REST_BASE_URL: http://spexregister-api:8080
+      FGV_REVIVAL_WEB_URL: ${FGV_REVIVAL_WEB_URL:-}
+      SPEXIFY_WEB_URL: ${SPEXIFY_WEB_URL:-}
+      SPEXFLIX_WEB_URL: ${SPEXFLIX_WEB_URL:-}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
       SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
