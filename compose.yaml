@@ -44,7 +44,7 @@ services:
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
       API_KEYCLOAK_CLIENT_CLIENT_ID: spexregister
-      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service
+      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service,fgv-spexgram-service,fgv-archive-service
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA}
       API_GEOCODING_ENABLED: ${API_GEOCODING_ENABLED:-false}
@@ -105,6 +105,8 @@ services:
       FGV_REVIVAL_WEB_URL: ${FGV_REVIVAL_WEB_URL:-}
       SPEXIFY_WEB_URL: ${SPEXIFY_WEB_URL:-}
       SPEXFLIX_WEB_URL: ${SPEXFLIX_WEB_URL:-}
+      SPEXGRAM_WEB_URL: ${SPEXGRAM_WEB_URL:-}
+      ARCHIVE_WEB_URL: ${ARCHIVE_WEB_URL:-}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
       SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
