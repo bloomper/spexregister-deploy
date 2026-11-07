@@ -6,6 +6,10 @@ x-logging: &logging
     max-size: 10m
     max-file: "5"
 
+# Keeps the processes from gaining privileges through setuid binaries
+x-security-opt: &security-opt
+  - no-new-privileges:true
+
 services:
   spexregister-mysql:
     image: ${MYSQL_IMAGE:-mysql:8.4}
@@ -60,6 +64,7 @@ services:
       ADMIN_NOTIFICATION_RECIPIENTS: ${ADMIN_NOTIFICATION_RECIPIENTS}
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep -q \"^HTTP/1.1 200\" <&3" ]
       interval: 10s
@@ -115,6 +120,7 @@ services:
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:3000/api/auth/ok" ]
       interval: 10s

@@ -11,7 +11,7 @@ Set it up first.
 ```
 Staging:
 Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─┬─▶ spexregister-web:3000   (WEB_HOST)
-                                                       └─▶ spexregister-api:8080   (API_HOST, optional)
+                                                       └─▶ spexregister-api:8080   (API_HOST)
 
 spexregister-web ──http──▶ spexregister-api:8080 ──▶ spexregister-mysql
 spexregister-web ──http──▶ umami-server:3000                       (network fgv-<DEPLOY_ENV>)
@@ -23,7 +23,8 @@ The web talks to the API over this project's default network. The API also joins
 which `fgv-infra-deploy` creates, to reach Keycloak's signing keys and admin API and, on staging, Mailpit.
 Nyuppsättning's server reads spex from the API there as `spexregister-api`. The web joins it too, to forward its visitor
 statistics to Umami in `fgv-infra-deploy` as `umami-server`. Browsers and the web reach Keycloak at its
-public `KEYCLOAK_HOST`. The API hostname is needed only for MCP clients and `/docs`.
+public `KEYCLOAK_HOST`. The API hostname publishes the whole API (GraphQL, MCP and `/docs`) for other applications
+and MCP clients.
 
 Every service is named after its application and role, as in `fgv-infra-deploy` and `fgv-revival-deploy`, so
 names on the shared network say where they come from.
@@ -88,8 +89,8 @@ An application with no policy denies everyone.
 |------------------------|---------------------------------------------|---------------------------------------|
 | Spexregister staging   | `WEB_HOST`                                  | *Emails*: testers, or *Emails ending in*: a domain |
 
-Leave `API_HOST` unprotected: MCP clients can't complete an Access login, and the API already requires a Keycloak
-token.
+Leave `API_HOST` unprotected: other applications and MCP clients can't complete an Access login, and the API already
+requires a Keycloak token.
 
 Testers then go through two logins: the Access PIN for `WEB_HOST`, then their Keycloak user.
 

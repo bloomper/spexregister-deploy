@@ -8,7 +8,8 @@ x-logging: &logging
 
 services:
   cloudflared:
-    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    # Pinned like every other image; CLOUDFLARED_VERSION in .env overrides it
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.10.1}
     command: tunnel --no-autoupdate run
     env_file:
       - ./secrets/cloudflared.env
