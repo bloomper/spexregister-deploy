@@ -36,6 +36,7 @@ generate MYSQL_ROOT_PASSWORD "$(random 32)"
 generate MYSQL_USER_PASSWORD "$(random 32)"
 copy_client_secret KEYCLOAK_ADMIN_CLIENT_SECRET fgv-admin
 copy_client_secret KEYCLOAK_CLIENT_SECRET spexregister
+copy_client_secret KEYCLOAK_SERVICE_CLIENT_SECRET spexregister-service
 generate API_SECRET_KEY "$(random 32)"
 generate WEB_AUTH_SECRET "$(random 48)"
 generate SAMPLE_USER_PASSWORD "$(random 16)"
