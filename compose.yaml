@@ -20,6 +20,7 @@ services:
       MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_USER_PASSWORD
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
       interval: 10s
