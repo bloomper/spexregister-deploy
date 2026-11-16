@@ -134,9 +134,10 @@ docker compose up -d
 docker compose logs -f spexregister-api   # sample data import takes a while
 ```
 
-With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data and all Keycloak users on every start. Besides
-random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
-has the password in `secrets/SAMPLE_USER_PASSWORD`.
+With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data on every start; it never changes Keycloak. The sample
+users (`admin@fgv.nu`, `editor@fgv.nu`, `user@fgv.nu` and the members `member01@fgv.nu` to `member50@fgv.nu`) are
+`fgv-infra-deploy`'s: run its `bin/seed-users.sh` once, which also holds their password. The import links the members
+to sample spexare.
 
 ## Updating
 
@@ -239,7 +240,7 @@ Staging and production use the same `compose.yaml`; they differ only in `.env`:
 - `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `API_IMPORT_SAMPLE_DATA=false`,
   `API_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
   placeholders)
-- no sample users: only the sample data import creates them
+- no sample users: `fgv-infra-deploy`'s `bin/seed-users.sh` refuses to run on production
 - `API_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
   `docker compose up -d spexregister-api`. That gives every existing row a baseline revision. The app seeds only while the
   change log is empty, so the flag can stay on afterwards

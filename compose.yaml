@@ -94,7 +94,6 @@ services:
       - source: KEYCLOAK_SERVICE_CLIENT_SECRET
         target: API_KEYCLOAK_SERVICE_CLIENT_SECRET
       - API_SECRET_KEY
-      - SAMPLE_USER_PASSWORD
       - SMTP_PASSWORD
 
   spexregister-web:
@@ -170,5 +169,3 @@ secrets:
     file: ./secrets/API_SECRET_KEY
   WEB_AUTH_SECRET:
     file: ./secrets/WEB_AUTH_SECRET
-  SAMPLE_USER_PASSWORD:
-    file: ./secrets/SAMPLE_USER_PASSWORD

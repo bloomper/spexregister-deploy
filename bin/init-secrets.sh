@@ -39,7 +39,6 @@ copy_client_secret KEYCLOAK_CLIENT_SECRET spexregister
 copy_client_secret KEYCLOAK_SERVICE_CLIENT_SECRET spexregister-service
 generate API_SECRET_KEY "$(random 32)"
 generate WEB_AUTH_SECRET "$(random 48)"
-generate SAMPLE_USER_PASSWORD "$(random 16)"
 
 if [[ ! -e secrets/SMTP_PASSWORD ]]; then
   : > secrets/SMTP_PASSWORD
