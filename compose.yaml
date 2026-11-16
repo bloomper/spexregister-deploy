@@ -114,7 +114,7 @@ services:
       API_GRAPHQL_ENDPOINT: http://spexregister-api:8080/api/graphql
       API_REST_BASE_URL: http://spexregister-api:8080
       SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
-      FGV_REVIVAL_WEB_URL: ${FGV_REVIVAL_WEB_URL:-}
+      REVIVAL_WEB_URL: ${REVIVAL_WEB_URL:-}
       SPEXIFY_WEB_URL: ${SPEXIFY_WEB_URL:-}
       SPEXFLIX_WEB_URL: ${SPEXFLIX_WEB_URL:-}
       SPEXGRAM_WEB_URL: ${SPEXGRAM_WEB_URL:-}
