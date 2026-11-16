@@ -108,7 +108,8 @@ sudo chown -R 1000:1000 data/api
 ```
 
 `bin/init-secrets.sh` copies the `fgv-admin`, `spexregister` and `spexregister-service` client secrets from
-`../fgv-infra-deploy/secrets/clients/`. Set `INFRA_DEPLOY` to its path if it is checked out elsewhere.
+`fgv-infra-deploy/secrets/clients/`, next to this checkout or one level further up. Set `INFRA_DEPLOY` to its path if it
+is elsewhere.
 
 For visitor statistics, add a website for `WEB_HOST` in `fgv-infra-deploy`'s Umami (see *Umami* in its README) and
 put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/script.js` and forwards events from

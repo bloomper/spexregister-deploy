@@ -5,7 +5,15 @@ cd "$(dirname "$0")/.."
 umask 077
 mkdir -p secrets
 
-infra_deploy=${INFRA_DEPLOY:-../fgv-infra-deploy}
+# Next to this checkout, as on the hosts, or one level further up when the repos are grouped per application
+# (fgv/fgv-infra-deploy, fgv/spexify/fgv-spexify-deploy, ...); INFRA_DEPLOY overrides both
+if [[ -n ${INFRA_DEPLOY:-} ]]; then
+  infra_deploy=$INFRA_DEPLOY
+elif [[ -d ../fgv-infra-deploy ]]; then
+  infra_deploy=../fgv-infra-deploy
+else
+  infra_deploy=../../fgv-infra-deploy
+fi
 
 generate() {
   local name=$1 value=$2
