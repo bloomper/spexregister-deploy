@@ -48,10 +48,10 @@ services:
       API_KEYCLOAK_URL: http://keycloak-server:8080/auth
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
-      API_KEYCLOAK_CLIENT_CLIENT_ID: spexregister
-      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: spexregister,fgv-spexipedia,fgv-spexipedia-service,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service,fgv-spexgram-service,fgv-archive-service
-      # Base data (spex, revivals, categories, tasks, characters) is copied from Spexipedia's change feed as spexregister-service
-      API_KEYCLOAK_SERVICE_CLIENT_ID: spexregister-service
+      API_KEYCLOAK_CLIENT_CLIENT_ID: fgv-spexregister
+      SPEXREGISTER_SECURITY_AUTHORIZED_PARTIES: fgv-spexregister,fgv-spexipedia,fgv-spexipedia-service,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service,fgv-spexgram-service,fgv-archive-service
+      # Base data (spex, revivals, categories, tasks, characters) is copied from Spexipedia's change feed as fgv-spexregister-service
+      API_KEYCLOAK_SERVICE_CLIENT_ID: fgv-spexregister-service
       API_SPEXIPEDIA_GRAPHQL_URL: ${SPEXIPEDIA_GRAPHQL_URL:-http://spexipedia-api:8080/api/graphql}
       SPEXIPEDIA_URL: ${SPEXIPEDIA_WEB_URL:-}
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
@@ -109,7 +109,7 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
       BETTER_AUTH_URL: https://${WEB_HOST}
-      KEYCLOAK_CLIENT_ID: spexregister
+      KEYCLOAK_CLIENT_ID: fgv-spexregister
       KEYCLOAK_ISSUER: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
       API_GRAPHQL_ENDPOINT: http://spexregister-api:8080/api/graphql
       API_REST_BASE_URL: http://spexregister-api:8080

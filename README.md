@@ -107,7 +107,7 @@ mkdir -p data/api/log_data data/api/index_data data/api/impex_data
 sudo chown -R 1000:1000 data/api
 ```
 
-`bin/init-secrets.sh` copies the `fgv-admin`, `spexregister` and `spexregister-service` client secrets from
+`bin/init-secrets.sh` copies the `fgv-admin`, `fgv-spexregister` and `fgv-spexregister-service` client secrets from
 `fgv-infra-deploy/secrets/clients/`, next to this checkout or one level further up. Set `INFRA_DEPLOY` to its path if it
 is elsewhere.
 
@@ -120,7 +120,7 @@ put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/scri
 user can open, in its application switcher. Leave one empty to leave it out.
 
 Spex, revivals, spex categories, tasks, task categories and characters are maintained in Spexipedia. The API keeps a
-copy, read from Spexipedia's change feed as the `spexregister-service` client: when Spexipedia announces a change, and
+copy, read from Spexipedia's change feed as the `fgv-spexregister-service` client: when Spexipedia announces a change, and
 every five minutes. Spexipedia's API must be up, and on the `fgv` network as `spexipedia-api`, before the sample data
 can be imported (the import waits up to ten minutes for it). Set `SPEXIPEDIA_GRAPHQL_URL` to reach it elsewhere. The
 admin page *Underhåll* shows how far the copy has got.
