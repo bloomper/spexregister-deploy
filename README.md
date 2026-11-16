@@ -107,16 +107,23 @@ mkdir -p data/api/log_data data/api/index_data data/api/impex_data
 sudo chown -R 1000:1000 data/api
 ```
 
-`bin/init-secrets.sh` copies the `fgv-admin` and `spexregister` client secrets from
-`../fgv-infra-deploy/secrets/clients/`. Set `INFRA_DEPLOY` to its path if it is checked out elsewhere.
+`bin/init-secrets.sh` copies the `fgv-admin`, `fgv-spexregister` and `fgv-spexregister-service` client secrets from
+`fgv-infra-deploy/secrets/clients/`, next to this checkout or one level further up. Set `INFRA_DEPLOY` to its path if it
+is elsewhere.
 
 For visitor statistics, add a website for `WEB_HOST` in `fgv-infra-deploy`'s Umami (see *Umami* in its README) and
 put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/script.js` and forwards events from
 `/stats/api/send`, so browsers only talk to `WEB_HOST`. Leave the ID empty to send nothing.
 
-`FGV_REVIVAL_WEB_URL`, `SPEXIFY_WEB_URL`, `SPEXFLIX_WEB_URL`, `SPEXGRAM_WEB_URL` and `ARCHIVE_WEB_URL` are the other
-applications' web addresses. The web's header lists each one that is set, and that the user can open, in its
-application switcher. Leave one empty to leave it out.
+`SPEXIPEDIA_WEB_URL`, `REVIVAL_WEB_URL`, `SPEXIFY_WEB_URL`, `SPEXFLIX_WEB_URL`, `SPEXGRAM_WEB_URL` and
+`ARCHIVE_WEB_URL` are the other applications' web addresses. The web's header lists each one that is set, and that the
+user can open, in its application switcher. Leave one empty to leave it out.
+
+Spex, revivals, spex categories, tasks, task categories and characters are maintained in Spexipedia. The API keeps a
+copy, read from Spexipedia's change feed as the `fgv-spexregister-service` client: when Spexipedia announces a change, and
+every five minutes. Spexipedia's API must be up, and on the `fgv` network as `spexipedia-api`, before the sample data
+can be imported (the import waits up to ten minutes for it). Set `SPEXIPEDIA_GRAPHQL_URL` to reach it elsewhere. The
+admin page *Underhåll* shows how far the copy has got.
 
 The `spexregister-api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories
 before the first start: Docker would otherwise create them owned by root, and the container couldn't write to them.
@@ -128,9 +135,10 @@ docker compose up -d
 docker compose logs -f spexregister-api   # sample data import takes a while
 ```
 
-With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data and all Keycloak users on every start. Besides
-random users it creates `admin@fgv.nu`, `editor@fgv.nu` and `user@fgv.nu`, one for each role. Every sample user
-has the password in `secrets/SAMPLE_USER_PASSWORD`.
+With `API_IMPORT_SAMPLE_DATA=true` the API replaces all data on every start; it never changes Keycloak. The sample
+users (`admin@fgv.nu`, `editor@fgv.nu`, `user@fgv.nu` and the members `member01@fgv.nu` to `member50@fgv.nu`) are
+`fgv-infra-deploy`'s: run its `bin/seed-users.sh` once, which also holds their password. The import links the members
+to sample spexare.
 
 ## Updating
 
@@ -233,7 +241,7 @@ Staging and production use the same `compose.yaml`; they differ only in `.env`:
 - `.env` copied from `production.env.example`: `DEPLOY_ENV=production`, `API_IMPORT_SAMPLE_DATA=false`,
   `API_SEED_AUDIT_DATA=false` and a real SMTP relay instead of Mailpit (see *Mail*; the values in the example are
   placeholders)
-- no sample users: only the sample data import creates them
+- no sample users: `fgv-infra-deploy`'s `bin/seed-users.sh` refuses to run on production
 - `API_SEED_AUDIT_DATA=true` once the migrated data is in place and corrected, followed by
   `docker compose up -d spexregister-api`. That gives every existing row a baseline revision. The app seeds only while the
   change log is empty, so the flag can stay on afterwards
