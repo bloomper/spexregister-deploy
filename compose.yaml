@@ -38,6 +38,8 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://spexregister-mysql/${MYSQL_DATABASE}
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      # The API refuses to import sample data in the production profile
+      SPRING_PROFILES_ACTIVE: ${DEPLOY_ENV}
       SPRING_JPA_PROPERTIES_HIBERNATE_SEARCH_BACKEND_DIRECTORY_ROOT: /data/index_data
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak-server:8080/auth/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
