@@ -43,7 +43,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
       SPEXREGISTER_IMPEX_STORAGE_PATH: /data/impex_data
       LOGGING_FILE_PATH: /data/log_data
-      SERVER_FORWARD_HEADERS_STRATEGY: native
+      SERVER_REQUEST_HEADER_FORWARDED_STRATEGY: web-server
       API_BASE_URL: https://${API_HOST}/api
       API_KEYCLOAK_URL: http://keycloak-server:8080/auth
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
