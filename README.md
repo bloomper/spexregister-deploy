@@ -115,7 +115,7 @@ For visitor statistics, add a website for `WEB_HOST` in `fgv-infra-deploy`'s Uma
 put its ID in `UMAMI_WEBSITE_ID`. The web serves Umami's tracker as `/stats/script.js` and forwards events from
 `/stats/api/send`, so browsers only talk to `WEB_HOST`. Leave the ID empty to send nothing.
 
-`SPEXIPEDIA_WEB_URL`, `REVIVAL_WEB_URL`, `SPEXIFY_WEB_URL`, `SPEXFLIX_WEB_URL`, `SPEXGRAM_WEB_URL` and
+`SPEXIPEDIA_WEB_URL`, `MEMBERSHIP_WEB_URL`, `REVIVAL_WEB_URL`, `SPEXIFY_WEB_URL`, `SPEXFLIX_WEB_URL`, `SPEXGRAM_WEB_URL` and
 `ARCHIVE_WEB_URL` are the other applications' web addresses. The web's header lists each one that is set, and that the
 user can open, in its application switcher. Leave one empty to leave it out.
 
@@ -124,6 +124,13 @@ copy, read from Spexipedia's change feed as the `fgv-spexregister-service` clien
 every five minutes. Spexipedia's API must be up, and on the `fgv` network as `spexipedia-api`, before the sample data
 can be imported (the import waits up to ten minutes for it). Set `SPEXIPEDIA_GRAPHQL_URL` to reach it elsewhere. The
 admin page *Underhåll* shows how far the copy has got.
+
+FGV memberships are kept in Medlemskap (`fgv-membership`). The API keeps a read-only copy, read from Medlemskap's change
+feed as `fgv-spexregister-service` the same way: when Medlemskap announces a change, and every five minutes. Medlemskap's
+API must be on the `fgv` network as `membership-api`; set `MEMBERSHIP_GRAPHQL_URL` and `MEMBERSHIP_API_URL` to reach it
+elsewhere. When a spexare is deleted, the API tells Medlemskap, which keeps the memberships and payments as bookkeeping
+records. `MEMBERSHIP_WEB_URL` is where the web links a member to Medlemskap. The admin page *Underhåll* shows how far
+this copy has got too.
 
 The `spexregister-api` container runs as user and group 1000, so it needs to own `data/api`. Create the directories
 before the first start: Docker would otherwise create them owned by root, and the container couldn't write to them.

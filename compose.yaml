@@ -51,11 +51,15 @@ services:
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
       API_KEYCLOAK_CLIENT_CLIENT_ID: fgv-spexregister
-      API_SECURITY_AUTHORIZED_PARTIES: fgv-spexregister,fgv-spexipedia,fgv-spexipedia-service,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service,fgv-spexgram-service,fgv-archive-service
+      API_SECURITY_AUTHORIZED_PARTIES: fgv-spexregister,fgv-spexipedia,fgv-spexipedia-service,fgv-membership-service,fgv-revival-service,fgv-spexify-service,fgv-spexflix-service,fgv-spexgram-service,fgv-archive-service
       # Base data (spex, revivals, categories, tasks, characters) is copied from Spexipedia's change feed as fgv-spexregister-service
       API_KEYCLOAK_SERVICE_CLIENT_ID: fgv-spexregister-service
       API_SPEXIPEDIA_GRAPHQL_URL: ${SPEXIPEDIA_GRAPHQL_URL:-http://spexipedia-api:8080/api/graphql}
       SPEXIPEDIA_URL: ${SPEXIPEDIA_WEB_URL:-}
+      # FGV memberships are copied from Medlemskap's change feed the same way, and Medlemskap is told about deleted spexare
+      API_MEDLEMSKAP_GRAPHQL_URL: ${MEMBERSHIP_GRAPHQL_URL:-http://membership-api:8080/api/graphql}
+      API_MEDLEMSKAP_API_URL: ${MEMBERSHIP_API_URL:-http://membership-api:8080}
+      MEMBERSHIP_URL: ${MEMBERSHIP_WEB_URL:-}
       API_SEED_AUDIT_DATA: ${API_SEED_AUDIT_DATA}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA}
       API_GEOCODING_ENABLED: ${API_GEOCODING_ENABLED:-false}
@@ -116,6 +120,7 @@ services:
       API_GRAPHQL_ENDPOINT: http://spexregister-api:8080/api/graphql
       API_REST_BASE_URL: http://spexregister-api:8080
       SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
+      MEMBERSHIP_WEB_URL: ${MEMBERSHIP_WEB_URL:-}
       REVIVAL_WEB_URL: ${REVIVAL_WEB_URL:-}
       SPEXIFY_WEB_URL: ${SPEXIFY_WEB_URL:-}
       SPEXFLIX_WEB_URL: ${SPEXFLIX_WEB_URL:-}
